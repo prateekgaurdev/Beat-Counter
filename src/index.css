@@ -4,22 +4,83 @@
 
 @layer base {
   body {
-    @apply bg-background text-textMain font-sans antialiased overflow-x-hidden;
+    @apply bg-slate-950 text-white font-sans antialiased overflow-x-hidden;
+  }
+
+  html {
+    scroll-behavior: smooth;
   }
 }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
-  @apply bg-surfaceHover rounded-full;
+  @apply bg-gray-700 rounded-full hover:bg-gray-600 transition-colors;
 }
 
-/* Utilities for layout */
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-600;
+}
+
+/* Utilities */
 .glass-panel {
-  @apply bg-surface/80 backdrop-blur-md border border-white/10 rounded-2xl shadow-xl;
+  @apply bg-gray-800/20 backdrop-blur-xl border border-gray-700/50 rounded-xl shadow-xl;
+}
+
+.transition-fast {
+  @apply transition-all duration-150;
+}
+
+.transition-smooth {
+  @apply transition-all duration-300;
+}
+
+/* Range slider styling */
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+  background: rgb(55 65 81);
+  height: 8px;
+  border-radius: 9999px;
+}
+
+input[type='range']::-moz-range-track {
+  background: rgb(55 65 81);
+  height: 8px;
+  border-radius: 9999px;
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #1e3a8a);
+  border: 2px solid #1e40af;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
+}
+
+input[type='range']::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #1e3a8a);
+  border: 2px solid #1e40af;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
 }
