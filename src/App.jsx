@@ -121,10 +121,10 @@ function MainApp({ dbData }) {
         '155.56': 'yYaYj7B3S2A', // D#
         '164.81': '0cG-y9hjmn8', // E
         '174.61': 'sR5vOoqYnQY', // F
-        '185.00': 'Hs6Np_H5yOk', // F#
-        '196.00': '_xUDgVV9qmo', // G
+        '185': 'Hs6Np_H5yOk', // F#
+        '196': '_xUDgVV9qmo', // G
         '207.65': '5lmrTaApMYI', // G#
-        '220.00': '84gfqGXxpDE', // A
+        '220': '84gfqGXxpDE', // A
         '233.08': 'SgTq2JzhRi4', // A#
         '246.94': 'gcfRIrxl0Rw'  // B
     };
@@ -157,6 +157,23 @@ function MainApp({ dbData }) {
     }, [isTimerRunning]);
 
     const tanpuraFadeIntervalRef = useRef(null);
+
+    // Keep Sargam Note in pitch sync if Tanpura Scale is changed while note is held down
+    useEffect(() => {
+        if (activeSargamNote) {
+            const noteData = [
+                { label: 'S', ratio: 1 }, { label: 'r', ratio: 1.0595 }, { label: 'R', ratio: 1.1225 },
+                { label: 'g', ratio: 1.1892 }, { label: 'G', ratio: 1.2599 }, { label: 'M', ratio: 1.3348 },
+                { label: 'm', ratio: 1.4142 }, { label: 'P', ratio: 1.4983 }, { label: 'd', ratio: 1.5874 },
+                { label: 'D', ratio: 1.6818 }, { label: 'n', ratio: 1.7818 }, { label: 'N', ratio: 1.8877 },
+                { label: "S'", ratio: 2 }
+            ].find(n => n.label === activeSargamNote);
+            
+            if (noteData) {
+                synth.updateSargamPitch(tanpuraTonic * noteData.ratio);
+            }
+        }
+    }, [tanpuraTonic, activeSargamNote]);
 
     useEffect(() => {
         if (ytPlayer) {
@@ -689,7 +706,7 @@ function MainApp({ dbData }) {
                                         </button>
 
                                         {/* Hidden YouTube Player for Tanpura */}
-                                        <div className="hidden">
+                                        <div className="absolute opacity-0 pointer-events-none w-0 h-0 overflow-hidden">
                                             <YouTube 
                                                 videoId={ytScaleMap[tanpuraTonic.toString()]}
                                                 opts={{
@@ -697,13 +714,22 @@ function MainApp({ dbData }) {
                                                         autoplay: 0,
                                                         loop: 1,
                                                         playlist: ytScaleMap[tanpuraTonic.toString()], // required for looping single video
-                                                        controls: 0
+                                                        controls: 0,
+                                                        playsinline: 1
                                                     }
                                                 }}
-                                                onReady={(e) => setYtPlayer(e.target)}
+                                                onReady={(e) => {
+                                                    setYtPlayer(e.target);
+                                                }}
                                                 onStateChange={(e) => {
-                                                    // Ensure it loops if it stops
+                                                    // State 0 is "Ended". Loop it instantly!
                                                     if (e.data === 0) e.target.playVideo();
+                                                    
+                                                    // Fix for browsers pausing unmuted invisible videos: 
+                                                    // sometimes it stays stuck in state 3 (buffering) or 2 (paused).
+                                                    if (tanpuraOn && (e.data === 2 || e.data === -1)) {
+                                                        e.target.playVideo();
+                                                    }
                                                 }}
                                             />
                                         </div>
@@ -936,8 +962,14 @@ function MainApp({ dbData }) {
                                         </div>
 
                                         {selectedRaagForModal.audios && selectedRaagForModal.audios.length > 0 && (
-                                            <div className="w-full">
-                                                <audio controls className="w-full h-10 outline-none" src={selectedRaagForModal.audios[0].url}>
+                                            <div className="w-full flex flex-col sm:flex-row items-start sm:items-center justify-between bg-surfaceHover/40 border border-borderFaint rounded-2xl sm:rounded-full p-2 gap-3 sm:gap-0">
+                                                <div className="flex items-center gap-3 pl-2">
+                                                    <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                                                        <Play className="w-4 h-4 text-primary ml-0.5" fill="currentColor" />
+                                                    </div>
+                                                    <span className="text-sm font-bold text-textMain line-clamp-1">{selectedRaagForModal.audios[0].title || `Listen to ${selectedRaagForModal.name}`}</span>
+                                                </div>
+                                                <audio controls className="h-10 outline-none w-full sm:w-[250px] flex-shrink-0" src={selectedRaagForModal.audios[0].url}>
                                                     Your browser does not support the audio element.
                                                 </audio>
                                             </div>

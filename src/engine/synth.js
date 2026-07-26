@@ -325,6 +325,18 @@ class SurSynthEngine {
     this.currentHarmoniumGain = amp;
   }
 
+  updateSargamPitch(freq) {
+    if (this.currentHarmoniumSource) {
+      if (this.buffers.harmonium) {
+        // Shift harmonium sample pitch dynamically
+        this.currentHarmoniumSource.playbackRate.setValueAtTime(freq / this.HARMONIUM_SAMPLE_FREQ, this.getCtx().currentTime);
+      } else {
+        // Shift fallback oscillator dynamically
+        this.currentHarmoniumSource.frequency.setValueAtTime(freq, this.getCtx().currentTime);
+      }
+    }
+  }
+
   stopSargamNote() {
     if (this.currentHarmoniumGain && this.currentHarmoniumSource) {
       const c = this.getCtx();
