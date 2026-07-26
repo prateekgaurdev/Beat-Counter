@@ -134,20 +134,6 @@ class SurSynthEngine {
         Dhage: (c,t)=>{ this.playTone(c,t,{freq:300,dur:.3,type:'triangle',gain:.5}); this.playThump(c,t,{freq:80,dur:.3,gain:.6}); },
         _default: (c,t)=>{ this.playTone(c,t,{freq:400,dur:.2,type:'triangle',gain:.4}); }
       },
-      pakhawaj: {
-        Dha:  (c,t)=>{ this.playTone(c,t,{freq:160,dur:.5,type:'sine',gain:.6}); this.playThump(c,t,{freq:75,dur:.5,gain:.9}); },
-        Dhin: (c,t)=>{ this.playTone(c,t,{freq:180,dur:.55,type:'sine',gain:.6}); this.playThump(c,t,{freq:70,dur:.55,gain:.85}); },
-        Ta:   (c,t)=>{ this.playTone(c,t,{freq:380,dur:.2,type:'sine',gain:.4}); },
-        Ga:   (c,t)=>{ this.playThump(c,t,{freq:65,dur:.5,gain:.8}); },
-        _default: (c,t)=>{ this.playTone(c,t,{freq:250,dur:.3,type:'sine',gain:.5}); }
-      },
-      mridangam: {
-        Tha:  (c,t)=>{ this.playTone(c,t,{freq:500,dur:.2,type:'triangle',gain:.5}); },
-        Dhi:  (c,t)=>{ this.playTone(c,t,{freq:560,dur:.2,type:'triangle',gain:.5}); },
-        Thom: (c,t)=>{ this.playThump(c,t,{freq:90,dur:.45,gain:.85}); },
-        Nam:  (c,t)=>{ this.playTone(c,t,{freq:420,dur:.15,type:'square',gain:.35}); },
-        _default: (c,t)=>{ this.playTone(c,t,{freq:450,dur:.2,type:'triangle',gain:.45}); }
-      },
       click: {
         _default: (c,t)=>{ this.playClick(c,t,{freq:2000,dur:.05,gain:.55}); }
       }

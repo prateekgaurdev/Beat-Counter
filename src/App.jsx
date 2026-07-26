@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useMetronome } from './hooks/useMetronome';
-import { Play, Square, Volume2, VolumeX, Settings, Music, ChevronDown, Info, X, Sun, Moon, Edit3, Save } from 'lucide-react';
+import { Play, Square, Volume2, VolumeX, Settings, Music, ChevronDown, Info, X, Sun, Moon, Edit3, Save, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import YouTube from 'react-youtube';
 
@@ -70,6 +70,25 @@ function MainApp({ dbData }) {
     const [showInfoModal, setShowInfoModal] = useState(false);
     const [activeTab, setActiveTab] = useState('taal'); // 'taal', 'raag', 'riyaz'
     
+    // Custom Select Dropdown States
+    const [isTaalSelectOpen, setIsTaalSelectOpen] = useState(false);
+    const [isSoundPackOpen, setIsSoundPackOpen] = useState(false);
+    const taalSelectRef = useRef(null);
+    const soundPackSelectRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (taalSelectRef.current && !taalSelectRef.current.contains(event.target)) {
+                setIsTaalSelectOpen(false);
+            }
+            if (soundPackSelectRef.current && !soundPackSelectRef.current.contains(event.target)) {
+                setIsSoundPackOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     const tapTimesRef = useRef([]);
 
     // Raag Explorer State
@@ -115,18 +134,18 @@ function MainApp({ dbData }) {
         }
     };
     const ytScaleMap = {
-        '130.81': 'gvgFhc3znTk', // C
-        '138.59': 'e66mCMLj7yI', // C#
-        '146.83': 'gmvJK05arjo', // D
-        '155.56': 'yYaYj7B3S2A', // D#
-        '164.81': '0cG-y9hjmn8', // E
-        '174.61': 'sR5vOoqYnQY', // F
-        '185': 'Hs6Np_H5yOk', // F#
-        '196': '_xUDgVV9qmo', // G
-        '207.65': '5lmrTaApMYI', // G#
-        '220': '84gfqGXxpDE', // A
-        '233.08': 'SgTq2JzhRi4', // A#
-        '246.94': 'gcfRIrxl0Rw'  // B
+        '130.81': 'aI3m7T9_t04', // C
+        '138.59': 'MHcNNesfLAI', // C#
+        '146.83': '-Fztg5ori8Y', // D
+        '155.56': 'lzHb4OMt51I', // D#
+        '164.81': 'ALDA3L39chY', // E
+        '174.61': 'ezA-5apuxaY', // F
+        '185': 'kEgXvDimI80',    // F#
+        '196': 'EVKX6pEbHM0',    // G
+        '207.65': 'cA67MPt-9rU', // G#
+        '220': 'zie4ub2ZXXs',    // A
+        '233.08': '_8kJ722qgNY', // A#
+        '246.94': '38DUz8OqPdk'  // B
     };
 
     // Theme State
@@ -376,46 +395,97 @@ function MainApp({ dbData }) {
                     <div className="w-full flex flex-col items-center gap-8 animate-in fade-in zoom-in-95 duration-300">
                         {/* Taal Selector & Sound Kit */}
                         <div className="flex flex-col md:flex-row gap-4 w-full max-w-2xl">
-                            <div className="relative group z-10 w-full flex gap-2">
+                            <div className="relative group z-50 w-full flex gap-2" ref={taalSelectRef}>
                                 <div className="relative w-full">
-                                    <select 
-                                        className="w-full bg-surface border border-borderMain text-xl font-bold py-4 px-6 rounded-2xl appearance-none cursor-pointer hover:border-primary/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 text-center text-ellipsis"
-                                        value={taal.id}
-                                        onChange={(e) => setTaal(taals.find(t => t.id === e.target.value))}
+                                    <button 
+                                        onClick={() => setIsTaalSelectOpen(!isTaalSelectOpen)}
+                                        className="w-full bg-surface border border-borderMain text-xl font-bold py-4 px-6 rounded-2xl cursor-pointer hover:border-primary/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 text-center shadow-sm text-textMain flex items-center justify-center gap-2"
                                     >
-                                        <optgroup label="Hindustani Classical">
-                                            {taals.filter(t => t.tradition === 'Hindustani').map(t => (
-                                                <option key={t.id} value={t.id}>{t.name.en} • {t.name.hi} ({t.maatras})</option>
-                                            ))}
-                                        </optgroup>
-                                        <optgroup label="Carnatic Sapta-Taala">
-                                            {taals.filter(t => t.tradition === 'Carnatic').map(t => (
-                                                <option key={t.id} value={t.id}>{t.name.en} ({t.maatras})</option>
-                                            ))}
-                                        </optgroup>
-                                    </select>
-                                    <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-textMuted pointer-events-none group-hover:text-primary transition-colors" />
+                                        <span className="truncate">{taal.name.en} • {taal.name.hi} ({taal.maatras})</span>
+                                        <ChevronDown className={`w-5 h-5 text-textMuted transition-transform ${isTaalSelectOpen ? 'rotate-180' : ''}`} />
+                                    </button>
+                                    
+                                    <AnimatePresence>
+                                        {isTaalSelectOpen && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: -10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: -10 }}
+                                                transition={{ duration: 0.2 }}
+                                                className="absolute top-full left-0 right-0 mt-2 bg-surface/95 backdrop-blur-xl border border-borderMain rounded-2xl shadow-2xl z-[100] max-h-[400px] overflow-y-auto hide-scrollbar overflow-x-hidden"
+                                            >
+                                                <div className="p-2">
+                                                    <div className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-textMuted/70">Hindustani Classical</div>
+                                                    {taals.filter(t => t.tradition === 'Hindustani').map(t => (
+                                                        <button
+                                                            key={t.id}
+                                                            onClick={() => { setTaal(t); setIsTaalSelectOpen(false); }}
+                                                            className={`w-full text-left px-4 py-3 rounded-xl transition-colors flex items-center justify-between group ${taal.id === t.id ? 'bg-primary text-background shadow-md' : 'text-textMain hover:bg-surfaceHover'}`}
+                                                        >
+                                                            <span className="font-bold text-base truncate">{t.name.en} • {t.name.hi} <span className={`font-medium text-sm transition-colors ${taal.id === t.id ? 'text-background/80' : 'text-textMuted group-hover:text-primary/70'}`}>({t.maatras})</span></span>
+                                                            {taal.id === t.id && <Check className="w-4 h-4" />}
+                                                        </button>
+                                                    ))}
+                                                    
+                                                    <div className="px-3 py-2 mt-2 text-xs font-bold uppercase tracking-widest text-textMuted/70 border-t border-borderFaint pt-4">Carnatic Sapta-Taala</div>
+                                                    {taals.filter(t => t.tradition === 'Carnatic').map(t => (
+                                                        <button
+                                                            key={t.id}
+                                                            onClick={() => { setTaal(t); setIsTaalSelectOpen(false); }}
+                                                            className={`w-full text-left px-4 py-3 rounded-xl transition-colors flex items-center justify-between group ${taal.id === t.id ? 'bg-primary text-background shadow-md' : 'text-textMain hover:bg-surfaceHover'}`}
+                                                        >
+                                                            <span className="font-bold text-base truncate">{t.name.en} <span className={`font-medium text-sm transition-colors ${taal.id === t.id ? 'text-background/80' : 'text-textMuted group-hover:text-primary/70'}`}>({t.maatras})</span></span>
+                                                            {taal.id === t.id && <Check className="w-4 h-4" />}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
                                 </div>
                                 <button 
-                                    className="bg-surface border border-borderMain p-4 rounded-2xl hover:border-primary/50 hover:text-primary transition-colors flex-shrink-0"
+                                    className="bg-surface border border-borderMain p-4 rounded-2xl hover:border-primary/50 hover:text-primary transition-colors flex-shrink-0 shadow-sm text-textMain"
                                     onClick={() => setShowInfoModal(true)}
                                     title="Taal Information"
                                 >
                                     <Info />
                                 </button>
                             </div>
-                            <div className="relative w-full md:w-48 flex-shrink-0">
-                                <select 
-                                    className="w-full bg-surface border border-borderMain py-4 px-6 rounded-2xl appearance-none cursor-pointer hover:border-primary/50 transition-colors focus:outline-none text-textMuted hover:text-textMain text-center"
-                                    value={soundPack}
-                                    onChange={(e) => setSoundPack(e.target.value)}
+                            <div className="relative w-full md:w-56 flex-shrink-0 z-40" ref={soundPackSelectRef}>
+                                <button 
+                                    onClick={() => setIsSoundPackOpen(!isSoundPackOpen)}
+                                    className="w-full bg-surface border border-borderMain py-4 px-6 rounded-2xl cursor-pointer hover:border-primary/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 text-textMain text-center shadow-sm font-semibold text-lg flex items-center justify-center gap-2"
                                 >
-                                    <option value="tabla">Tabla Kit</option>
-                                    <option value="pakhawaj">Pakhawaj</option>
-                                    <option value="mridangam">Mridangam</option>
-                                    <option value="click">Classic Click</option>
-                                </select>
-                                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-textMuted pointer-events-none w-4 h-4" />
+                                    <span>{soundPack === 'tabla' ? 'Tabla Kit' : 'Metronome'}</span>
+                                    <ChevronDown className={`w-5 h-5 text-textMuted transition-transform ${isSoundPackOpen ? 'rotate-180' : ''}`} />
+                                </button>
+
+                                <AnimatePresence>
+                                    {isSoundPackOpen && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: -10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -10 }}
+                                            transition={{ duration: 0.2 }}
+                                            className="absolute top-full left-0 right-0 mt-2 bg-surface/95 backdrop-blur-xl border border-borderMain rounded-2xl shadow-2xl z-[100] p-2"
+                                        >
+                                            <button
+                                                onClick={() => { setSoundPack('tabla'); setIsSoundPackOpen(false); }}
+                                                className={`w-full text-left px-4 py-3 rounded-xl transition-colors flex items-center justify-between ${soundPack === 'tabla' ? 'bg-primary text-background shadow-md' : 'text-textMain hover:bg-surfaceHover'}`}
+                                            >
+                                                <span className="font-bold">Tabla Kit</span>
+                                                {soundPack === 'tabla' && <Check className="w-4 h-4" />}
+                                            </button>
+                                            <button
+                                                onClick={() => { setSoundPack('click'); setIsSoundPackOpen(false); }}
+                                                className={`w-full text-left px-4 py-3 rounded-xl transition-colors flex items-center justify-between ${soundPack === 'click' ? 'bg-primary text-background shadow-md' : 'text-textMain hover:bg-surfaceHover'}`}
+                                            >
+                                                <span className="font-bold">Metronome</span>
+                                                {soundPack === 'click' && <Check className="w-4 h-4" />}
+                                            </button>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
                             </div>
                         </div>
 
@@ -457,10 +527,10 @@ function MainApp({ dbData }) {
                         </div>
 
                         {/* Tempo Control & Laya Ratio */}
-                        <div className="flex flex-col items-center w-full max-w-[400px] gap-8 bg-[#13161c] rounded-3xl p-8 shadow-2xl border border-white/5">
+                        <div className="flex flex-col items-center w-full max-w-[400px] gap-8 bg-surfaceHover rounded-3xl p-8 shadow-2xl border border-borderMain">
                             <div className="flex items-center justify-between w-full">
                                 <button 
-                                    className="w-12 h-12 flex justify-center items-center rounded-full bg-[#1e232b] hover:bg-[#2a303b] border border-white/5 text-2xl font-light transition-all active:scale-95 text-white shadow-sm"
+                                    className="w-12 h-12 flex justify-center items-center rounded-full bg-surface hover:bg-surfaceHover border border-borderFaint text-2xl font-light transition-all active:scale-95 text-textMain shadow-sm"
                                     onClick={() => setBpm(Math.max(20, bpm - 1))}
                                 >−</button>
                                 
@@ -469,28 +539,28 @@ function MainApp({ dbData }) {
                                         <input 
                                             type="number" 
                                             autoFocus
-                                            className="bg-transparent text-5xl font-black text-center w-32 focus:outline-none focus:border-b-2 focus:border-primary tabular-nums text-white drop-shadow-sm tracking-tight"
+                                            className="bg-transparent text-5xl font-black text-center w-32 focus:outline-none focus:border-b-2 focus:border-primary tabular-nums text-textMain drop-shadow-sm tracking-tight"
                                             value={bpmInputValue} 
                                             onChange={(e) => setBpmInputValue(e.target.value)} 
                                             onBlur={handleBpmInputBlur}
                                             onKeyDown={(e) => { if (e.key === 'Enter') handleBpmInputBlur(); }}
                                         />
                                     ) : (
-                                        <div className="text-5xl font-black tabular-nums cursor-pointer hover:text-primary transition-colors text-white drop-shadow-sm tracking-tight" onClick={() => setIsEditingBpm(true)}>
+                                        <div className="text-5xl font-black tabular-nums cursor-pointer hover:text-primary transition-colors text-textMain drop-shadow-sm tracking-tight" onClick={() => setIsEditingBpm(true)}>
                                             {bpm}
                                         </div>
                                     )}
-                                    <p className="text-gray-400 text-[0.65rem] font-bold tracking-[0.2em] uppercase mt-1 opacity-80">BPM</p>
+                                    <p className="text-textMuted text-[0.65rem] font-bold tracking-[0.2em] uppercase mt-1 opacity-80">BPM</p>
                                 </div>
 
                                 <button 
-                                    className="w-12 h-12 flex justify-center items-center rounded-full bg-[#1e232b] hover:bg-[#2a303b] border border-white/5 text-2xl font-light transition-all active:scale-95 text-white shadow-sm"
+                                    className="w-12 h-12 flex justify-center items-center rounded-full bg-surface hover:bg-surfaceHover border border-borderFaint text-2xl font-light transition-all active:scale-95 text-textMain shadow-sm"
                                     onClick={() => setBpm(Math.min(400, bpm + 1))}
                                 >+</button>
                             </div>
 
                             <div className="w-full relative py-2">
-                                <div className="absolute inset-0 top-1/2 -translate-y-1/2 h-1.5 bg-[#1e232b] rounded-full overflow-hidden">
+                                <div className="absolute inset-0 top-1/2 -translate-y-1/2 h-1.5 bg-surface rounded-full overflow-hidden border border-borderFaint">
                                     <div 
                                         className="h-full bg-amber-500 rounded-full" 
                                         style={{ width: `${((bpm - (taal.bpm_range[0] || 30)) / ((taal.bpm_range[1] || 300) - (taal.bpm_range[0] || 30))) * 100}%` }}
@@ -507,7 +577,7 @@ function MainApp({ dbData }) {
                             </div>
 
                             {/* Laya (Subdivision) Selector */}
-                            <div className="flex bg-[#1e232b] rounded-xl p-1.5 w-full">
+                            <div className="flex bg-surface rounded-xl p-1.5 w-full border border-borderFaint">
                                 {[
                                     { val: 1, label: '1x', sub: '' },
                                     { val: 2, label: '2x', sub: '(Dugun)' },
@@ -519,12 +589,12 @@ function MainApp({ dbData }) {
                                         onClick={() => setSubdivision(l.val)}
                                         className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-lg transition-all duration-200 ${
                                             subdivision === l.val 
-                                            ? 'bg-amber-500 text-black shadow-md font-bold' 
-                                            : 'text-gray-400 hover:text-white hover:bg-white/5 font-semibold'
+                                            ? 'bg-amber-500 text-white shadow-md font-bold' 
+                                            : 'text-textMuted hover:text-textMain hover:bg-surfaceHover font-semibold'
                                         }`}
                                     >
                                         <span className="text-sm">{l.label}</span>
-                                        {l.sub && <span className={`text-[0.55rem] mt-0.5 ${subdivision === l.val ? 'text-black/70 font-bold' : 'text-gray-500 font-semibold'}`}>{l.sub}</span>}
+                                        {l.sub && <span className={`text-[0.55rem] mt-0.5 ${subdivision === l.val ? 'text-white/90 font-bold' : 'text-textMuted/70 font-semibold'}`}>{l.sub}</span>}
                                     </button>
                                 ))}
                             </div>
