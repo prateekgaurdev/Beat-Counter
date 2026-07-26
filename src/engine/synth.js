@@ -16,6 +16,8 @@ class SurSynthEngine {
 
   async loadBuffers() {
     const c = this.getCtx();
+    const BASE_TABLA_URL = "https://mojhivqchmrifaalrmsq.supabase.co/storage/v1/object/public/tabla";
+    
     const load = async (url) => {
       try {
         const res = await fetch(url);
@@ -26,9 +28,9 @@ class SurSynthEngine {
         return null;
       }
     };
-    this.buffers.clickSam = await load('/metronome1.mp3');
-    this.buffers.clickOther = await load('/metronome2.mp3');
-    this.buffers.tablaLoop = await load('/MWV Tabla Loop 1.wav');
+    this.buffers.clickSam = await load(`${BASE_TABLA_URL}/metronome1.mp3`);
+    this.buffers.clickOther = await load(`${BASE_TABLA_URL}/metronome2.mp3`);
+    this.buffers.tablaLoop = await load(`${BASE_TABLA_URL}/MWV%20Tabla%20Loop%201.wav`);
   }
 
   getCtx() {

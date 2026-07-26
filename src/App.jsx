@@ -1,22 +1,68 @@
 import { useState, useRef, useEffect } from 'react';
 import { useMetronome } from './hooks/useMetronome';
-import { Play, Square, Volume2, VolumeX, Settings, Music, ChevronDown, Info, X, Sun, Moon } from 'lucide-react';
+import { Play, Square, Volume2, VolumeX, Settings, Music, ChevronDown, Info, X, Sun, Moon, AudioLines } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-import { thaats } from './data/thaats';
-import { raags } from './data/raags';
 import { synth } from './engine/synth';
 
 function App() {
+    const [dbData, setDbData] = useState(() => {
+        const cached = localStorage.getItem('surtaal_db_cache');
+        return cached ? JSON.parse(cached) : { taals: [], thaats: [], raags: [] };
+    });
+    
+    const [dbLoading, setDbLoading] = useState(() => !localStorage.getItem('surtaal_db_cache'));
+
+    useEffect(() => {
+        async function fetchDatabase() {
+            try {
+                // Fetch all data from our new Prisma backend concurrently
+                const [tRes, thRes, rRes] = await Promise.all([
+                    fetch('http://localhost:3001/api/taals'),
+                    fetch('http://localhost:3001/api/thaats'),
+                    fetch('http://localhost:3001/api/raags')
+                ]);
+                
+                const taals = await tRes.json();
+                const thaats = await thRes.json();
+                const raags = await rRes.json();
+                
+                const newData = { taals, thaats, raags };
+                setDbData(newData);
+                localStorage.setItem('surtaal_db_cache', JSON.stringify(newData));
+                setDbLoading(false);
+            } catch (error) {
+                console.error("Error loading data from DB:", error);
+                setDbLoading(false); // Make sure it stops loading even if fetch fails
+            }
+        }
+        fetchDatabase();
+    }, []);
+
+    if (dbLoading) {
+        return (
+            <div className="min-h-screen bg-background text-textMain flex flex-col items-center justify-center">
+                <Music className="w-12 h-12 text-primary animate-pulse mb-4" />
+                <h2 className="text-2xl font-bold tracking-widest text-textMuted">LOADING DATABASE...</h2>
+            </div>
+        );
+    }
+
+    return <MainApp dbData={dbData} />;
+}
+
+function MainApp({ dbData }) {
+    const { taals, thaats, raags } = dbData;
+
     const {
-        taals, taal, setTaal,
+        taal, setTaal,
         bpm, setBpm,
         isPlaying, stopRequested, togglePlay,
         soundOn, setSoundOn,
         soundPack, setSoundPack,
         subdivision, setSubdivision,
         currentBeat, avartan, currentBol
-    } = useMetronome('teentaal');
+    } = useMetronome(taals, 'teentaal');
 
     const [isEditingBpm, setIsEditingBpm] = useState(false);
     const [bpmInputValue, setBpmInputValue] = useState(bpm);
@@ -28,6 +74,7 @@ function App() {
     // Raag Explorer State
     const [selectedThaat, setSelectedThaat] = useState('all');
     const [raagSearch, setRaagSearch] = useState('');
+    const [selectedRaagForModal, setSelectedRaagForModal] = useState(null);
     
     // Riyaz Studio State
     const [tanpuraOn, setTanpuraOn] = useState(false);
@@ -306,10 +353,10 @@ function App() {
                         </div>
 
                         {/* Tempo Control & Laya Ratio */}
-                        <div className="flex flex-col items-center w-full max-w-md gap-6 glass-panel p-6">
+                        <div className="flex flex-col items-center w-full max-w-[400px] gap-8 bg-[#13161c] rounded-3xl p-8 shadow-2xl border border-white/5">
                             <div className="flex items-center justify-between w-full">
                                 <button 
-                                    className="w-12 h-12 flex justify-center items-center rounded-full bg-surfaceHover hover:bg-surfaceHover/80 text-xl font-bold transition-all active:scale-95"
+                                    className="w-12 h-12 flex justify-center items-center rounded-full bg-[#1e232b] hover:bg-[#2a303b] border border-white/5 text-2xl font-light transition-all active:scale-95 text-white shadow-sm"
                                     onClick={() => setBpm(Math.max(20, bpm - 1))}
                                 >−</button>
                                 
@@ -318,52 +365,62 @@ function App() {
                                         <input 
                                             type="number" 
                                             autoFocus
-                                            className="bg-transparent text-4xl font-bold text-center w-24 focus:outline-none focus:border-b-2 focus:border-primary tabular-nums"
+                                            className="bg-transparent text-5xl font-black text-center w-32 focus:outline-none focus:border-b-2 focus:border-primary tabular-nums text-white drop-shadow-sm tracking-tight"
                                             value={bpmInputValue} 
                                             onChange={(e) => setBpmInputValue(e.target.value)} 
                                             onBlur={handleBpmInputBlur}
                                             onKeyDown={(e) => { if (e.key === 'Enter') handleBpmInputBlur(); }}
                                         />
                                     ) : (
-                                        <div className="text-4xl font-bold tabular-nums cursor-pointer hover:text-primary transition-colors" onClick={() => setIsEditingBpm(true)}>
+                                        <div className="text-5xl font-black tabular-nums cursor-pointer hover:text-primary transition-colors text-white drop-shadow-sm tracking-tight" onClick={() => setIsEditingBpm(true)}>
                                             {bpm}
                                         </div>
                                     )}
-                                    <p className="text-textMuted text-xs font-bold tracking-widest uppercase mt-1">BPM</p>
+                                    <p className="text-gray-400 text-[0.65rem] font-bold tracking-[0.2em] uppercase mt-1 opacity-80">BPM</p>
                                 </div>
 
                                 <button 
-                                    className="w-12 h-12 flex justify-center items-center rounded-full bg-surfaceHover hover:bg-surfaceHover/80 text-xl font-bold transition-all active:scale-95"
+                                    className="w-12 h-12 flex justify-center items-center rounded-full bg-[#1e232b] hover:bg-[#2a303b] border border-white/5 text-2xl font-light transition-all active:scale-95 text-white shadow-sm"
                                     onClick={() => setBpm(Math.min(400, bpm + 1))}
                                 >+</button>
                             </div>
 
-                            <input 
-                                type="range" 
-                                min={taal.bpm_range[0]} 
-                                max={taal.bpm_range[1]} 
-                                value={bpm} 
-                                onChange={(e) => setBpm(parseInt(e.target.value, 10))} 
-                                className="w-full h-2 bg-surfaceHover rounded-full appearance-none cursor-pointer accent-primary"
-                            />
+                            <div className="w-full relative py-2">
+                                <div className="absolute inset-0 top-1/2 -translate-y-1/2 h-1.5 bg-[#1e232b] rounded-full overflow-hidden">
+                                    <div 
+                                        className="h-full bg-amber-500 rounded-full" 
+                                        style={{ width: `${((bpm - (taal.bpm_range[0] || 30)) / ((taal.bpm_range[1] || 300) - (taal.bpm_range[0] || 30))) * 100}%` }}
+                                    ></div>
+                                </div>
+                                <input 
+                                    type="range" 
+                                    min={taal.bpm_range[0] || 30} 
+                                    max={taal.bpm_range[1] || 300} 
+                                    value={bpm} 
+                                    onChange={(e) => setBpm(parseInt(e.target.value, 10))} 
+                                    className="relative w-full h-2 appearance-none bg-transparent cursor-pointer z-10 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber-500"
+                                />
+                            </div>
 
                             {/* Laya (Subdivision) Selector */}
-                            <div className="flex bg-surfaceHover rounded-lg p-1 w-full max-w-[250px]">
+                            <div className="flex bg-[#1e232b] rounded-xl p-1.5 w-full">
                                 {[
-                                    { val: 1, label: '1x' },
-                                    { val: 2, label: '2x (Dugun)' },
-                                    { val: 3, label: '3x (Tigun)' },
-                                    { val: 4, label: '4x (Chaugun)' },
+                                    { val: 1, label: '1x', sub: '' },
+                                    { val: 2, label: '2x', sub: '(Dugun)' },
+                                    { val: 3, label: '3x', sub: '(Tigun)' },
+                                    { val: 4, label: '4x', sub: '(Chaugun)' },
                                 ].map(l => (
                                     <button
                                         key={l.val}
                                         onClick={() => setSubdivision(l.val)}
-                                        className={`flex-1 text-xs py-1.5 rounded-md font-bold transition-colors ${
-                                            subdivision === l.val ? 'bg-primary text-background' : 'text-textMuted hover:text-textMain'
+                                        className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-lg transition-all duration-200 ${
+                                            subdivision === l.val 
+                                            ? 'bg-amber-500 text-black shadow-md font-bold' 
+                                            : 'text-gray-400 hover:text-white hover:bg-white/5 font-semibold'
                                         }`}
-                                        title={l.label}
                                     >
-                                        {l.label}
+                                        <span className="text-sm">{l.label}</span>
+                                        {l.sub && <span className={`text-[0.55rem] mt-0.5 ${subdivision === l.val ? 'text-black/70 font-bold' : 'text-gray-500 font-semibold'}`}>{l.sub}</span>}
                                     </button>
                                 ))}
                             </div>
@@ -441,36 +498,48 @@ function App() {
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
                             {raags
                                 .filter(r => (selectedThaat === 'all' || r.thaat === selectedThaat) && r.name.toLowerCase().includes(raagSearch.toLowerCase()))
-                                .map(r => (
-                                <div key={r.id} className="glass-panel p-6 hover:border-primary/30 transition-colors">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div>
-                                            <h3 className="text-xl font-bold text-primary">{r.name}</h3>
-                                            <span className="text-xs text-textMuted uppercase tracking-widest">{thaats.find(t => t.id === r.thaat)?.name} Thaat</span>
+                                .map(r => {
+                                    const hasAudio = (r.audios && r.audios.length > 0) || r.audioUrl;
+                                    return (
+                                        <div 
+                                            key={r.id} 
+                                            className="glass-panel p-6 hover:border-primary/50 transition-colors cursor-pointer group flex flex-col h-full"
+                                            onClick={() => setSelectedRaagForModal(r)}
+                                        >
+                                            <div className="flex justify-between items-start mb-5">
+                                                <div>
+                                                    <h3 className="text-xl font-bold text-primary group-hover:text-amber-500 transition-colors">{r.name}</h3>
+                                                    <span className="text-[0.65rem] text-textMuted uppercase tracking-widest font-semibold mt-1 block">
+                                                        {r.thaat && r.thaat !== 'unknown' ? `${thaats.find(t => t.id === r.thaat)?.name || r.thaat} Thaat` : 'Independent / Mixed Thaat'}
+                                                    </span>
+                                                </div>
+                                                {hasAudio && (
+                                                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-primary/10 border border-primary/20 text-primary rounded-full shadow-sm" title="Contains Audio Sample">
+                                                        <Volume2 className="w-3 h-3" />
+                                                        <span className="text-[0.65rem] font-bold uppercase tracking-wider">Audio</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            
+                                            <div className="flex flex-col gap-3 flex-grow">
+                                                <div className="bg-surfaceHover/40 p-2.5 rounded-xl border border-borderFaint">
+                                                    <span className="text-textMuted text-[0.65rem] uppercase tracking-widest font-bold block mb-1">Aroh</span>
+                                                    <span className="font-mono text-sm text-textMain tracking-wide">{r.aroh}</span>
+                                                </div>
+                                                <div className="bg-surfaceHover/40 p-2.5 rounded-xl border border-borderFaint">
+                                                    <span className="text-textMuted text-[0.65rem] uppercase tracking-widest font-bold block mb-1">Avroh</span>
+                                                    <span className="font-mono text-sm text-textMain tracking-wide">{r.avroh}</span>
+                                                </div>
+                                            </div>
+
+                                            <div className="pt-4 mt-4 border-t border-borderFaint flex flex-wrap gap-2">
+                                                <span className="px-2.5 py-1 bg-surfaceHover border border-borderMain rounded-md text-xs text-textMuted font-medium">{r.time}</span>
+                                                {r.vadi && r.vadi !== '-' && <span className="px-2.5 py-1 bg-surfaceHover border border-borderMain rounded-md text-xs text-textMuted font-medium">Vadi: {r.vadi}</span>}
+                                                {r.jati && r.jati !== '-' && <span className="px-2.5 py-1 bg-surfaceHover border border-borderMain rounded-md text-xs text-textMuted font-medium">{r.jati}</span>}
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div className="space-y-3 text-sm">
-                                        <div>
-                                            <span className="text-textMuted block text-xs mb-1">Aroh</span>
-                                            <span className="font-devanagari font-medium">{r.aroh}</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-textMuted block text-xs mb-1">Avroh</span>
-                                            <span className="font-devanagari font-medium">{r.avroh}</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-textMuted block text-xs mb-1">Pakad</span>
-                                            <span className="font-devanagari text-secondary">{r.pakad}</span>
-                                        </div>
-                                        <div className="pt-3 flex flex-wrap gap-2">
-                                            <span className="px-2 py-1 bg-surfaceHover rounded text-xs">Vadi: {r.vadi}</span>
-                                            <span className="px-2 py-1 bg-surfaceHover rounded text-xs">Samvadi: {r.samvadi}</span>
-                                            <span className="px-2 py-1 bg-primary/10 text-primary border border-primary/20 rounded text-xs">{r.time}</span>
-                                            <span className="px-2 py-1 bg-secondary/10 text-secondary border border-secondary/20 rounded text-xs">{r.rasa}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
+                                    );
+                                })}
                         </div>
                     </div>
                 )}
@@ -634,7 +703,7 @@ function App() {
                             <div className="space-y-6 text-textMuted">
                                 <div className="bg-surfaceHover/50 p-4 rounded-xl border border-borderFaint">
                                     <p className="text-sm uppercase tracking-widest font-bold text-textMain mb-2">Theka Structure</p>
-                                    <p className="text-lg text-primary font-medium tracking-wider">{taal.theka_display}</p>
+                                    <p className="text-lg text-primary font-medium tracking-wider">{taal.theka_display || taal.theka.join(" ")}</p>
                                     {taal.anga_structure && (
                                         <p className="text-sm mt-2 text-secondary">Anga: {taal.anga_structure}</p>
                                     )}
@@ -642,34 +711,200 @@ function App() {
 
                                 <div>
                                     <h3 className="text-textMain font-bold mb-2">Description</h3>
-                                    <p className="leading-relaxed">{taal.description}</p>
+                                    <p className="leading-relaxed">{taal.description || "No description available."}</p>
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="bg-surfaceHover/30 p-4 rounded-xl">
                                         <h3 className="text-textMain font-bold mb-2 text-sm uppercase">Category</h3>
-                                        <p>{taal.category}</p>
+                                        <p>{taal.category || 'Standard'}</p>
                                     </div>
                                     <div className="bg-surfaceHover/30 p-4 rounded-xl">
                                         <h3 className="text-textMain font-bold mb-2 text-sm uppercase">Typical Laya (Tempo)</h3>
                                         <div className="flex flex-wrap gap-2">
-                                            {taal.typical_laya.map(l => (
+                                            {(taal.typical_laya || []).map(l => (
                                                 <span key={l} className="px-2 py-1 bg-surfaceHover rounded-md text-xs capitalize">{l}</span>
                                             ))}
                                         </div>
                                     </div>
                                 </div>
 
-                                <div>
-                                    <h3 className="text-textMain font-bold mb-2 text-sm uppercase">Used In</h3>
-                                    <div className="flex flex-wrap gap-2">
-                                        {taal.used_in.map(use => (
-                                            <span key={use} className="px-3 py-1.5 bg-primary/10 text-primary border border-primary/20 rounded-full text-sm">
-                                                {use}
+                                {taal.used_in && taal.used_in.length > 0 && (
+                                    <div>
+                                        <h3 className="text-textMain font-bold mb-2 text-sm uppercase">Used In</h3>
+                                        <div className="flex flex-wrap gap-2">
+                                            {taal.used_in.map(use => (
+                                                <span key={use} className="px-3 py-1.5 bg-primary/10 text-primary border border-primary/20 rounded-full text-sm">
+                                                    {use}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+
+                {/* Raag Detail Modal */}
+                {selectedRaagForModal && (
+                    <>
+                        <motion.div 
+                            className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setSelectedRaagForModal(null)}
+                        />
+                        <motion.div 
+                            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl bg-background border border-borderMain rounded-3xl shadow-2xl z-50 max-h-[90vh] overflow-y-auto"
+                            initial={{ opacity: 0, scale: 0.95, y: '-45%', x: '-50%' }}
+                            animate={{ opacity: 1, scale: 1, y: '-50%', x: '-50%' }}
+                            exit={{ opacity: 0, scale: 0.95, y: '-45%', x: '-50%' }}
+                            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                        >
+                            <div className="p-4 md:p-8">
+                                <button 
+                                    className="p-2 hover:bg-surfaceHover rounded-full transition-colors absolute top-4 right-4 z-50 bg-background/50 backdrop-blur-sm border border-borderMain text-textMain"
+                                    onClick={() => setSelectedRaagForModal(null)}
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+
+                                <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr] rounded-2xl overflow-hidden mb-6 border border-borderMain shadow-md bg-surface">
+                                    <div className="relative min-h-[200px] md:min-h-0 bg-black">
+                                        <img src="/sitar-hero.webp" alt="Sitar" className="absolute inset-0 w-full h-full object-cover sepia-[0.3] contrast-105 opacity-90" />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                                        <h2 className="absolute bottom-4 left-6 text-3xl font-bold text-white drop-shadow-lg">{selectedRaagForModal.name}</h2>
+                                    </div>
+                                    <div className="p-6 md:p-8 flex flex-col justify-center gap-6">
+                                        <div className="flex flex-wrap gap-2">
+                                            <span className="px-3 py-1.5 rounded-full font-bold text-[0.65rem] tracking-[0.15em] uppercase border border-primary/30 text-primary bg-primary/5">
+                                                {thaats.find(t => t.id === selectedRaagForModal.thaat)?.name || selectedRaagForModal.thaat} Thaat
                                             </span>
-                                        ))}
+                                            <span className="px-3 py-1.5 rounded-full font-bold text-[0.65rem] tracking-[0.15em] uppercase border border-borderMain text-textMuted bg-surfaceHover">
+                                                {selectedRaagForModal.time}
+                                            </span>
+                                            <span className="px-3 py-1.5 rounded-full font-bold text-[0.65rem] tracking-[0.15em] uppercase border border-borderMain text-textMuted bg-surfaceHover">
+                                                {selectedRaagForModal.jati}
+                                            </span>
+                                        </div>
+
+                                        {selectedRaagForModal.audios && selectedRaagForModal.audios.length > 0 && (
+                                            <div className="w-full">
+                                                <audio controls className="w-full h-10 outline-none" src={selectedRaagForModal.audios[0].url}>
+                                                    Your browser does not support the audio element.
+                                                </audio>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
+
+                                <section className="glass-panel mb-6 overflow-hidden">
+                                    <div className="px-6 py-4 border-b border-borderMain">
+                                        <h3 className="font-bold text-lg text-textMain">Attributes</h3>
+                                    </div>
+                                    <div className="p-6">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4 text-sm">
+                                            <div><span className="text-primary/80 italic mr-1">Thaat:</span> <span className="font-medium text-textMain capitalize">{selectedRaagForModal.thaat}</span></div>
+                                            <div><span className="text-primary/80 italic mr-1">Thaat Notes:</span> <span className="font-medium text-textMain">{selectedRaagForModal.thaat_notes}</span></div>
+                                            <div><span className="text-primary/80 italic mr-1">Time:</span> <span className="font-medium text-textMain">{selectedRaagForModal.time}</span></div>
+                                            <div><span className="text-primary/80 italic mr-1">Prahar:</span> <span className="font-medium text-textMain">{selectedRaagForModal.prahar}</span></div>
+                                            <div><span className="text-primary/80 italic mr-1">Jati:</span> <span className="font-medium text-textMain">{selectedRaagForModal.jati}</span></div>
+                                            <div><span className="text-primary/80 italic mr-1">Vadi:</span> <span className="font-medium text-textMain">{selectedRaagForModal.vadi}</span></div>
+                                            <div><span className="text-primary/80 italic mr-1">Samvadi:</span> <span className="font-medium text-textMain">{selectedRaagForModal.samvadi}</span></div>
+                                            <div><span className="text-primary/80 italic mr-1">Saptak Pradhanata:</span> <span className="font-medium text-textMain">{selectedRaagForModal.saptak_pradhanata}</span></div>
+                                            <div><span className="text-primary/80 italic mr-1">Tanpura Tuning:</span> <span className="font-medium text-textMain">{selectedRaagForModal.tanpura_tuning}</span></div>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                <section className="glass-panel mb-6 overflow-hidden">
+                                    <div className="px-6 py-4 border-b border-borderMain flex justify-between items-center">
+                                        <h3 className="font-bold text-lg text-textMain">Aroh / Avaroh / Pakar</h3>
+                                        <span className="text-[0.65rem] tracking-[0.15em] uppercase text-primary cursor-pointer hover:underline">Notation Help</span>
+                                    </div>
+                                    <div className="p-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
+                                            <div>
+                                                <span className="text-[0.65rem] tracking-[0.15em] uppercase text-textMuted block mb-2">Aroh</span>
+                                                <span className="font-mono text-base text-textMain">{selectedRaagForModal.aroh}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[0.65rem] tracking-[0.15em] uppercase text-textMuted block mb-2">Avaroh</span>
+                                                <span className="font-mono text-base text-textMain">{selectedRaagForModal.avroh}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[0.65rem] tracking-[0.15em] uppercase text-textMuted block mb-2">Pakar</span>
+                                                <span className="font-mono text-base text-textMain">{selectedRaagForModal.pakad}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                {selectedRaagForModal.recordings && selectedRaagForModal.recordings.length > 0 && (
+                                    <section className="glass-panel mb-6 overflow-hidden">
+                                        <div className="px-6 py-4 border-b border-borderMain">
+                                            <h3 className="font-bold text-lg text-textMain">Recordings & Resources</h3>
+                                        </div>
+                                        <div className="p-6 overflow-x-auto">
+                                            <table className="w-full text-sm text-left">
+                                                <thead>
+                                                    <tr className="border-b border-borderMain text-[0.65rem] tracking-[0.15em] uppercase text-textMuted">
+                                                        <th className="py-2 font-normal">Song</th>
+                                                        <th className="py-2 font-normal">Category</th>
+                                                        <th className="py-2 font-normal">Artist(s)</th>
+                                                        <th className="py-2 font-normal">Tala</th>
+                                                        <th className="py-2 font-normal">Poet</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {selectedRaagForModal.recordings.map((rec, i) => (
+                                                        <tr key={i} className="border-b border-borderFaint hover:bg-surfaceHover/50 transition-colors">
+                                                            <td className="py-3 text-textMain">{rec.song}</td>
+                                                            <td className="py-3 text-textMuted">{rec.category}</td>
+                                                            <td className="py-3 text-textMuted">{rec.artist}</td>
+                                                            <td className="py-3 text-textMuted">{rec.tala}</td>
+                                                            <td className="py-3 text-textMuted">{rec.poet}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </section>
+                                )}
+
+                                {selectedRaagForModal.film_songs && selectedRaagForModal.film_songs.length > 0 && (
+                                    <section className="glass-panel mb-6 overflow-hidden">
+                                        <div className="px-6 py-4 border-b border-borderMain">
+                                            <h3 className="font-bold text-lg text-textMain">Film Songs ({selectedRaagForModal.film_songs.length})</h3>
+                                        </div>
+                                        <div className="p-6 overflow-x-auto">
+                                            <table className="w-full text-sm text-left">
+                                                <thead>
+                                                    <tr className="border-b border-borderMain text-[0.65rem] tracking-[0.15em] uppercase text-textMuted">
+                                                        <th className="py-2 font-normal">Song</th>
+                                                        <th className="py-2 font-normal">Film</th>
+                                                        <th className="py-2 font-normal">Singer(s)</th>
+                                                        <th className="py-2 font-normal">Music Director</th>
+                                                        <th className="py-2 font-normal">Tala</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {selectedRaagForModal.film_songs.map((song, i) => (
+                                                        <tr key={i} className="border-b border-borderFaint hover:bg-surfaceHover/50 transition-colors">
+                                                            <td className="py-3 text-textMain">{song.song}</td>
+                                                            <td className="py-3 text-textMuted">{song.film}</td>
+                                                            <td className="py-3 text-textMuted">{song.singer}</td>
+                                                            <td className="py-3 text-textMuted">{song.music_director}</td>
+                                                            <td className="py-3 text-textMuted">{song.tala}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </section>
+                                )}
                             </div>
                         </motion.div>
                     </>

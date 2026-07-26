@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { engine } from '../engine/MetronomeEngine';
-import { taals } from '../data/taals';
 
-export function useMetronome(initialTaalId = 'teentaal') {
-    const [taal, setTaal] = useState(taals.find(t => t.id === initialTaalId) || taals[0]);
+export function useMetronome(initialTaals, initialTaalId = 'teentaal') {
+    const [taal, setTaal] = useState(initialTaals.find(t => t.id === initialTaalId) || initialTaals[0]);
     const [bpm, setBpm] = useState(taal.default_bpm);
     const [isPlaying, setIsPlaying] = useState(false);
     const [soundOn, setSoundOn] = useState(true);
@@ -111,7 +110,6 @@ export function useMetronome(initialTaalId = 'teentaal') {
     }, []);
 
     return {
-        taals,
         taal,
         setTaal,
         bpm,

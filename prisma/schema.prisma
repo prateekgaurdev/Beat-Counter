@@ -1,0 +1,63 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Thaat {
+  id           String @id
+  name         String
+  swaras       Json
+  nature       String
+  sample_raag  String
+  mood         String
+  raags        Raag[]
+}
+
+model Taal {
+  id               String @id
+  name_en          String
+  name_hi          String
+  tradition        String
+  maatras          Int
+  vibhags          Json
+  taali_beats      Json
+  khali_beats      Json
+  sam              Int
+  theka            Json
+  theka_devanagari Json
+  default_bpm      Int
+  bpm_range        Json
+  description      String?
+  category         String?
+  used_in          Json?
+  typical_laya     Json?
+  theka_display    String?
+  anga_structure   String?
+}
+
+model Raag {
+  id                String @id
+  name              String
+  thaat_id          String?
+  thaat             Thaat?  @relation(fields: [thaat_id], references: [id])
+  thaat_notes       String?
+  aroh              String
+  avroh             String
+  pakad             String
+  vadi              String
+  samvadi           String
+  time              String
+  prahar            String?
+  jati              String
+  saptak_pradhanata String?
+  tanpura_tuning    String?
+  rasa              String?
+  description       String?
+  audios            Json?
+  film_songs        Json?
+  recordings        Json?
+}

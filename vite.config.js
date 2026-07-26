@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['metronome1.mp3', 'metronome2.mp3', 'MWV Tabla Loop 1.wav'],
+      includeAssets: ['favicon.ico', 'sitar-hero.webp'],
       manifest: {
         name: 'TaalForge',
         short_name: 'TaalForge',
@@ -25,6 +25,38 @@ export default defineConfig({
             src: 'pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png'
+          }
+        ]
+      },
+      workbox: {
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/mojhivqchmrifaalrmsq\.supabase\.co\/storage\/v1\/object\/public\/.*$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'supabase-audio-cache',
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 30 * 24 * 60 * 60 // 30 days
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+          {
+            urlPattern: /^http:\/\/localhost:3001\/api\/.*$/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 24 * 60 * 60 // 1 day fallback
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
           }
         ]
       }
