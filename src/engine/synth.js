@@ -1,0 +1,185 @@
+/* =========================================================
+   SurTaal Pro — Lightweight Web Audio Synth Engine
+   ========================================================= */
+
+class SurSynthEngine {
+  constructor() {
+    this.ctx = null;
+    this.tanpuraNodes = null;
+  }
+
+  getCtx() {
+    if (!this.ctx) {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AudioContext();
+    }
+    return this.ctx;
+  }
+
+  resume() {
+    const c = this.getCtx();
+    if (c.state === 'suspended') c.resume();
+    return c;
+  }
+
+  noiseBuffer(c, duration) {
+    const bufferSize = Math.max(1, Math.floor(c.sampleRate * duration));
+    const buffer = c.createBuffer(1, bufferSize, c.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+    return buffer;
+  }
+
+  playTone(c, time, { freq, dur, type = 'sine', gain = 0.6, decay = 0.25, detune = 0 }) {
+    const osc = c.createOscillator();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, time);
+    osc.detune.setValueAtTime(detune, time);
+
+    const amp = c.createGain();
+    amp.gain.setValueAtTime(0.0001, time);
+    amp.gain.exponentialRampToValueAtTime(gain, time + 0.006);
+    amp.gain.exponentialRampToValueAtTime(0.0001, time + dur * decay + 0.05);
+
+    osc.connect(amp).connect(c.destination);
+    osc.start(time);
+    osc.stop(time + dur + 0.1);
+  }
+
+  playThump(c, time, { freq = 90, dur = 0.35, gain = 0.9 }) {
+    const osc = c.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq * 1.8, time);
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.6, time + dur * 0.5);
+
+    const amp = c.createGain();
+    amp.gain.setValueAtTime(0.0001, time);
+    amp.gain.exponentialRampToValueAtTime(gain, time + 0.008);
+    amp.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+
+    osc.connect(amp).connect(c.destination);
+    osc.start(time);
+    osc.stop(time + dur + 0.1);
+  }
+
+  playClick(c, time, { freq = 1800, dur = 0.05, gain = 0.5 }) {
+    const noise = c.createBufferSource();
+    noise.buffer = this.noiseBuffer(c, dur);
+    const filt = c.createBiquadFilter();
+    filt.type = 'highpass';
+    filt.frequency.value = freq;
+    const amp = c.createGain();
+    amp.gain.setValueAtTime(gain, time);
+    amp.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+    noise.connect(filt).connect(amp).connect(c.destination);
+    noise.start(time);
+    noise.stop(time + dur + 0.02);
+  }
+
+  getKits() {
+    return {
+      tabla: {
+        Dha:  (c,t)=>{ this.playTone(c,t,{freq:220,dur:.5,type:'triangle',gain:.55,decay:.5}); this.playThump(c,t,{freq:85,dur:.45,gain:.85}); },
+        Dhin: (c,t)=>{ this.playTone(c,t,{freq:246,dur:.55,type:'triangle',gain:.55,decay:.55}); this.playThump(c,t,{freq:80,dur:.5,gain:.8}); },
+        Na:   (c,t)=>{ this.playTone(c,t,{freq:520,dur:.18,type:'triangle',gain:.5,decay:.3}); },
+        Tin:  (c,t)=>{ this.playTone(c,t,{freq:480,dur:.35,type:'triangle',gain:.5,decay:.4}); },
+        Ta:   (c,t)=>{ this.playTone(c,t,{freq:440,dur:.12,type:'square',gain:.35,decay:.2}); },
+        Ge:   (c,t)=>{ this.playThump(c,t,{freq:70,dur:.5,gain:.8}); },
+        Ga:   (c,t)=>{ this.playThump(c,t,{freq:70,dur:.5,gain:.8}); },
+        Ka:   (c,t)=>{ this.playClick(c,t,{freq:900,dur:.06,gain:.4}); this.playThump(c,t,{freq:60,dur:.12,gain:.4}); },
+        Kat:  (c,t)=>{ this.playClick(c,t,{freq:900,dur:.06,gain:.4}); },
+        Tirakita: (c,t)=>{ this.playTone(c,t,{freq:600,dur:.1,type:'triangle',gain:.35,decay:.3}); },
+        Dhage: (c,t)=>{ this.playTone(c,t,{freq:300,dur:.3,type:'triangle',gain:.5}); this.playThump(c,t,{freq:80,dur:.3,gain:.6}); },
+        _default: (c,t)=>{ this.playTone(c,t,{freq:400,dur:.2,type:'triangle',gain:.4}); }
+      },
+      pakhawaj: {
+        Dha:  (c,t)=>{ this.playTone(c,t,{freq:160,dur:.5,type:'sine',gain:.6}); this.playThump(c,t,{freq:75,dur:.5,gain:.9}); },
+        Dhin: (c,t)=>{ this.playTone(c,t,{freq:180,dur:.55,type:'sine',gain:.6}); this.playThump(c,t,{freq:70,dur:.55,gain:.85}); },
+        Ta:   (c,t)=>{ this.playTone(c,t,{freq:380,dur:.2,type:'sine',gain:.4}); },
+        Ga:   (c,t)=>{ this.playThump(c,t,{freq:65,dur:.5,gain:.8}); },
+        _default: (c,t)=>{ this.playTone(c,t,{freq:250,dur:.3,type:'sine',gain:.5}); }
+      },
+      mridangam: {
+        Tha:  (c,t)=>{ this.playTone(c,t,{freq:500,dur:.2,type:'triangle',gain:.5}); },
+        Dhi:  (c,t)=>{ this.playTone(c,t,{freq:560,dur:.2,type:'triangle',gain:.5}); },
+        Thom: (c,t)=>{ this.playThump(c,t,{freq:90,dur:.45,gain:.85}); },
+        Nam:  (c,t)=>{ this.playTone(c,t,{freq:420,dur:.15,type:'square',gain:.35}); },
+        _default: (c,t)=>{ this.playTone(c,t,{freq:450,dur:.2,type:'triangle',gain:.45}); }
+      },
+      click: {
+        _default: (c,t)=>{ this.playClick(c,t,{freq:2000,dur:.05,gain:.55}); }
+      }
+    };
+  }
+
+  playBol(kitName, bol, time, roleAccent) {
+    const c = this.resume();
+    const kits = this.getKits();
+    const kit = kits[kitName] || kits.tabla;
+    const fn = kit[bol] || kit._default;
+    
+    fn(c, time);
+    
+    if (roleAccent === 'sam') {
+      this.playClick(c, time, { freq: 3000, dur: 0.03, gain: 0.18 });
+    }
+  }
+
+  startTanpura(baseFreq) {
+    const c = this.resume();
+    this.stopTanpura();
+    
+    const master = c.createGain();
+    master.gain.value = 0.18;
+    master.connect(c.destination);
+
+    const ratios = [1, 1.5, 1, 2]; // Sa, Pa, Sa, Sa(upper)
+    const nodes = [];
+    
+    ratios.forEach((ratio) => {
+      const osc = c.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.value = baseFreq * ratio;
+      const filt = c.createBiquadFilter();
+      filt.type = 'lowpass';
+      filt.frequency.value = 900;
+      const gain = c.createGain();
+      gain.gain.value = 0;
+      osc.connect(filt).connect(gain).connect(master);
+      osc.start();
+      nodes.push({ osc, gain, filt });
+    });
+
+    let idx = 0;
+    const pluckInterval = setInterval(() => {
+      const now = c.currentTime;
+      const active = nodes[idx % nodes.length];
+      active.gain.gain.cancelScheduledValues(now);
+      active.gain.gain.setValueAtTime(0.5, now);
+      active.gain.gain.exponentialRampToValueAtTime(0.001, now + 1.6);
+      idx++;
+    }, 900);
+
+    this.tanpuraNodes = { nodes, master, pluckInterval };
+  }
+
+  stopTanpura() {
+    if (!this.tanpuraNodes) return;
+    clearInterval(this.tanpuraNodes.pluckInterval);
+    this.tanpuraNodes.nodes.forEach(n => {
+      try { n.osc.stop(); } catch (e) {}
+    });
+    this.tanpuraNodes = null;
+  }
+
+  isTanpuraPlaying() { 
+    return !!this.tanpuraNodes; 
+  }
+
+  playSargamNote(freq) {
+    const c = this.resume();
+    this.playTone(c, c.currentTime, { freq, dur: 0.9, type: 'sine', gain: 0.4, decay: 0.7 });
+  }
+}
+
+export const synth = new SurSynthEngine();
