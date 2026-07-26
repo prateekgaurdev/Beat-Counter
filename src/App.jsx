@@ -27,6 +27,7 @@ function App() {
 
     // Raag Explorer State
     const [selectedThaat, setSelectedThaat] = useState('all');
+    const [raagSearch, setRaagSearch] = useState('');
     
     // Riyaz Studio State
     const [tanpuraOn, setTanpuraOn] = useState(false);
@@ -406,7 +407,17 @@ function App() {
                     <div className="w-full flex flex-col items-center gap-8 animate-in fade-in zoom-in-95 duration-300">
                         <div className="text-center max-w-2xl">
                             <h2 className="text-3xl font-bold mb-4">Raag Explorer</h2>
-                            <p className="text-textMuted">Browse Hindustani raags by parent Thaat. Discover their aroh, avroh, pakad, and traditional time of rendition.</p>
+                            <p className="text-textMuted mb-6">Browse an extensive database of 70+ Hindustani raags, including complex Jod (compound) raags. Discover their aroh, avroh, pakad, and traditional time of rendition.</p>
+                            
+                            <div className="relative w-full max-w-md mx-auto">
+                                <input
+                                    type="search"
+                                    placeholder="Search Raag (e.g., Jog, Bhairav...)"
+                                    value={raagSearch}
+                                    onChange={(e) => setRaagSearch(e.target.value)}
+                                    className="w-full bg-surface border border-borderMain py-3 px-6 rounded-full focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all text-textMain"
+                                />
+                            </div>
                         </div>
                         
                         <div className="flex flex-wrap justify-center gap-2 mb-4">
@@ -428,7 +439,9 @@ function App() {
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
-                            {raags.filter(r => selectedThaat === 'all' || r.thaat === selectedThaat).map(r => (
+                            {raags
+                                .filter(r => (selectedThaat === 'all' || r.thaat === selectedThaat) && r.name.toLowerCase().includes(raagSearch.toLowerCase()))
+                                .map(r => (
                                 <div key={r.id} className="glass-panel p-6 hover:border-primary/30 transition-colors">
                                     <div className="flex justify-between items-start mb-4">
                                         <div>

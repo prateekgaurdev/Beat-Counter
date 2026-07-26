@@ -1820,5 +1820,500 @@ export const taals = [
     ],
     "theka_display": "Laghu(4)",
     "anga_structure": "Single Laghu(4)"
+  },
+  {
+    "id": "shikhar",
+    "name": {
+      "en": "Shikhar Taal",
+      "hi": "शिखर ताल"
+    },
+    "tradition": "Hindustani",
+    "maatras": 17,
+    "vibhags": [
+      {
+        "beats": 6,
+        "type": "sam"
+      },
+      {
+        "beats": 6,
+        "type": "tali"
+      },
+      {
+        "beats": 2,
+        "type": "khali"
+      },
+      {
+        "beats": 3,
+        "type": "tali"
+      }
+    ],
+    "taali_beats": [
+      1,
+      7,
+      15
+    ],
+    "khali_beats": [
+      13
+    ],
+    "sam": 1,
+    "theka": [
+      "Dha",
+      "Dhin",
+      "Na",
+      "Dha",
+      "Tu",
+      "Na",
+      "Dha",
+      "Dhin",
+      "Na",
+      "Dha",
+      "Tu",
+      "Na",
+      "Na",
+      "Ti",
+      "Ti",
+      "Ta",
+      "Ta"
+    ],
+    "theka_devanagari": [
+      "धा",
+      "धिं",
+      "ना",
+      "धा",
+      "तु",
+      "ना",
+      "धा",
+      "धिं",
+      "ना",
+      "धा",
+      "तु",
+      "ना",
+      "ना",
+      "ती",
+      "ती",
+      "ता",
+      "ता"
+    ],
+    "default_bpm": 100,
+    "bpm_range": [
+      60,
+      200
+    ],
+    "description": "A rare 17-beat Jod (compound) taal used in advanced pakhawaj and tabla solos.",
+    "category": "Advanced / Jod Taal",
+    "used_in": [
+      "Pakhawaj solo",
+      "Tabla solo"
+    ],
+    "typical_laya": [
+      "madhya"
+    ]
+  },
+  {
+    "id": "matt",
+    "name": {
+      "en": "Matt Taal",
+      "hi": "मत्त ताल"
+    },
+    "tradition": "Hindustani",
+    "maatras": 18,
+    "vibhags": [
+      {
+        "beats": 4,
+        "type": "sam"
+      },
+      {
+        "beats": 4,
+        "type": "tali"
+      },
+      {
+        "beats": 4,
+        "type": "khali"
+      },
+      {
+        "beats": 4,
+        "type": "tali"
+      },
+      {
+        "beats": 2,
+        "type": "tali"
+      }
+    ],
+    "taali_beats": [
+      1,
+      5,
+      13,
+      17
+    ],
+    "khali_beats": [
+      9
+    ],
+    "sam": 1,
+    "theka": [
+      "Dha",
+      "Dhin",
+      "Dhin",
+      "Dha",
+      "Dha",
+      "Dhin",
+      "Dhin",
+      "Dha",
+      "Dha",
+      "Tin",
+      "Tin",
+      "Ta",
+      "Ta",
+      "Dhin",
+      "Dhin",
+      "Dha",
+      "Dhi",
+      "Na"
+    ],
+    "theka_devanagari": [
+      "धा",
+      "धिं",
+      "धिं",
+      "धा",
+      "धा",
+      "धिं",
+      "धिं",
+      "धा",
+      "धा",
+      "तिं",
+      "तिं",
+      "ता",
+      "ता",
+      "धिं",
+      "धिं",
+      "धा",
+      "धी",
+      "ना"
+    ],
+    "default_bpm": 120,
+    "bpm_range": [
+      80,
+      240
+    ],
+    "description": "An 18-beat Jod taal, essentially Teentaal (16) + 2 extra beats, creating a complex rhythmic cycle.",
+    "category": "Advanced / Jod Taal",
+    "used_in": [
+      "Kathak",
+      "Tabla solo"
+    ],
+    "typical_laya": [
+      "drut",
+      "madhya"
+    ]
+  },
+  {
+    "id": "ashtamangal",
+    "name": {
+      "en": "Ashtamangal",
+      "hi": "अष्टमंगल"
+    },
+    "tradition": "Hindustani",
+    "maatras": 11,
+    "vibhags": [
+      {
+        "beats": 4,
+        "type": "sam"
+      },
+      {
+        "beats": 4,
+        "type": "tali"
+      },
+      {
+        "beats": 3,
+        "type": "khali"
+      }
+    ],
+    "taali_beats": [
+      1,
+      5
+    ],
+    "khali_beats": [
+      9
+    ],
+    "sam": 1,
+    "theka": [
+      "Dha",
+      "Dhin",
+      "Dhin",
+      "Dha",
+      "Dha",
+      "Dhin",
+      "Dhin",
+      "Dha",
+      "Ti",
+      "Ti",
+      "Na"
+    ],
+    "theka_devanagari": [
+      "धा",
+      "धिं",
+      "धिं",
+      "धा",
+      "धा",
+      "धिं",
+      "धिं",
+      "धा",
+      "ती",
+      "ती",
+      "ना"
+    ],
+    "default_bpm": 90,
+    "bpm_range": [
+      50,
+      150
+    ],
+    "description": "An 11-beat Jod taal combining 8 beats and 3 beats. Used rarely in intricate compositions.",
+    "category": "Advanced / Jod Taal",
+    "used_in": [
+      "Tabla solo"
+    ],
+    "typical_laya": [
+      "madhya"
+    ]
+  },
+  {
+    "id": "basant-taal",
+    "name": {
+      "en": "Basant Taal",
+      "hi": "बसंत ताल"
+    },
+    "tradition": "Hindustani",
+    "maatras": 9,
+    "vibhags": [
+      {
+        "beats": 4,
+        "type": "sam"
+      },
+      {
+        "beats": 5,
+        "type": "tali"
+      }
+    ],
+    "taali_beats": [
+      1,
+      5
+    ],
+    "khali_beats": [],
+    "sam": 1,
+    "theka": [
+      "Dha",
+      "Dhin",
+      "Ta",
+      "Dha",
+      "Tin",
+      "Ta",
+      "Tit",
+      "Kat",
+      "Ga"
+    ],
+    "theka_devanagari": [
+      "धा",
+      "धिं",
+      "ता",
+      "धा",
+      "तिं",
+      "ता",
+      "तित",
+      "कत",
+      "ग"
+    ],
+    "default_bpm": 100,
+    "bpm_range": [
+      60,
+      180
+    ],
+    "description": "A 9-beat cycle. Its asymmetry gives it a distinct swinging feel, often used in spring season compositions.",
+    "category": "Rare / Seasonal",
+    "used_in": [
+      "Instrumental Gat"
+    ],
+    "typical_laya": [
+      "madhya"
+    ]
+  },
+  {
+    "id": "gajajhampa",
+    "name": {
+      "en": "Gajajhampa",
+      "hi": "गजझम्पा"
+    },
+    "tradition": "Hindustani",
+    "maatras": 15,
+    "vibhags": [
+      {
+        "beats": 4,
+        "type": "sam"
+      },
+      {
+        "beats": 4,
+        "type": "tali"
+      },
+      {
+        "beats": 4,
+        "type": "khali"
+      },
+      {
+        "beats": 3,
+        "type": "tali"
+      }
+    ],
+    "taali_beats": [
+      1,
+      5,
+      13
+    ],
+    "khali_beats": [
+      9
+    ],
+    "sam": 1,
+    "theka": [
+      "Dha",
+      "Dhin",
+      "Na",
+      "Ka",
+      "Dhi",
+      "Na",
+      "Na",
+      "Ka",
+      "Tin",
+      "Na",
+      "Ka",
+      "Tak",
+      "Dhin",
+      "Na",
+      "Ka"
+    ],
+    "theka_devanagari": [
+      "धा",
+      "धिं",
+      "ना",
+      "क",
+      "धी",
+      "ना",
+      "ना",
+      "क",
+      "तिं",
+      "ना",
+      "क",
+      "तक",
+      "धिं",
+      "ना",
+      "क"
+    ],
+    "default_bpm": 80,
+    "bpm_range": [
+      40,
+      160
+    ],
+    "description": "A 15-beat cycle representing the 'gait of an elephant', very majestic and complex.",
+    "category": "Advanced",
+    "used_in": [
+      "Vocal Khyal",
+      "Pakhawaj solo"
+    ],
+    "typical_laya": [
+      "vilambit"
+    ]
+  },
+  {
+    "id": "ada-chautaal",
+    "name": {
+      "en": "Ada Chautaal",
+      "hi": "आड़ा चौताल"
+    },
+    "tradition": "Hindustani",
+    "maatras": 14,
+    "vibhags": [
+      {
+        "beats": 2,
+        "type": "sam"
+      },
+      {
+        "beats": 2,
+        "type": "tali"
+      },
+      {
+        "beats": 2,
+        "type": "khali"
+      },
+      {
+        "beats": 2,
+        "type": "tali"
+      },
+      {
+        "beats": 2,
+        "type": "khali"
+      },
+      {
+        "beats": 2,
+        "type": "tali"
+      },
+      {
+        "beats": 2,
+        "type": "tali"
+      }
+    ],
+    "taali_beats": [
+      1,
+      3,
+      7,
+      11,
+      13
+    ],
+    "khali_beats": [
+      5,
+      9
+    ],
+    "sam": 1,
+    "theka": [
+      "Dhin",
+      "Tirakita",
+      "Dhi",
+      "Na",
+      "Tu",
+      "Na",
+      "Kat",
+      "Ta",
+      "Tirakita",
+      "Dhi",
+      "Na",
+      "Dhi",
+      "Dhi",
+      "Na"
+    ],
+    "theka_devanagari": [
+      "धिं",
+      "तिरकिट",
+      "धी",
+      "ना",
+      "तू",
+      "ना",
+      "कत्",
+      "ता",
+      "तिरकिट",
+      "धी",
+      "ना",
+      "धी",
+      "धी",
+      "ना"
+    ],
+    "default_bpm": 90,
+    "bpm_range": [
+      60,
+      180
+    ],
+    "description": "A 14-beat cycle with 7 vibhags of 2 beats each. An advanced Jod taal often used in Khyal.",
+    "category": "Classical / Jod Taal",
+    "used_in": [
+      "Khyal",
+      "Tabla solo"
+    ],
+    "typical_laya": [
+      "madhya"
+    ]
   }
 ];
