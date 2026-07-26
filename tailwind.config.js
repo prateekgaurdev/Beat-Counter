@@ -14,9 +14,9 @@ export default {
         secondary: 'rgba(var(--rgb-secondary), <alpha-value>)',
         textMain: 'rgba(var(--rgb-text-main), <alpha-value>)',
         textMuted: 'rgba(var(--rgb-text-muted), <alpha-value>)',
-        borderFaint: 'rgba(var(--rgb-text-main), 0.05)',
-        borderMain: 'rgba(var(--rgb-text-main), 0.1)',
-        borderStrong: 'rgba(var(--rgb-text-main), 0.3)',
+        borderFaint: 'var(--border-faint)',
+        borderMain: 'var(--border-main)',
+        borderStrong: 'var(--border-strong)',
       },
       fontFamily: {
         sans: ['Inter', 'sans-serif'],

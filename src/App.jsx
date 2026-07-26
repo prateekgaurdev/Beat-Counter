@@ -121,24 +121,24 @@ function App() {
             const vibhagBeats = [];
             for (let i = 0; i < vibhag.beats; i++) {
                 const isCurrent = currentBeat !== '--' && currentBeat === beatCounter;
-                let circleClass = "w-6 h-6 md:w-8 md:h-8 rounded-full border-2 transition-all duration-150 flex items-center justify-center ";
+                let circleClass = "w-8 h-8 md:w-10 md:h-10 rounded-full border-[1.5px] transition-all duration-150 flex items-center justify-center ";
                 
                 if (vibhag.type === 'sam' && i === 0) {
-                    circleClass += isCurrent ? "bg-primary border-primary shadow-[0_0_15px_rgba(var(--rgb-primary),1)]" : "bg-surfaceHover border-primary text-primary";
+                    circleClass += isCurrent ? "bg-primary border-primary shadow-[0_0_15px_rgba(var(--rgb-primary),0.5)] text-background" : "bg-primary/10 border-primary/40 text-primary";
                 } else if (vibhag.type === 'tali' && i === 0) {
-                    circleClass += isCurrent ? "bg-secondary border-secondary shadow-[0_0_10px_rgba(var(--rgb-secondary),1)]" : "bg-transparent border-secondary text-secondary";
+                    circleClass += isCurrent ? "bg-secondary border-secondary shadow-[0_0_10px_rgba(var(--rgb-secondary),0.5)] text-background" : "bg-secondary/10 border-secondary/40 text-secondary";
                 } else if (vibhag.type === 'khali' && i === 0) {
-                    circleClass += isCurrent ? "bg-surfaceHover border-textMuted" : "bg-transparent border-dashed border-textMuted text-textMuted";
+                    circleClass += isCurrent ? "bg-surfaceHover border-textMuted text-textMain" : "bg-transparent border-dashed border-textMuted/60 text-textMuted";
                 } else {
-                    circleClass += isCurrent ? "bg-textMain border-textMain" : "bg-surfaceHover border-surfaceHover";
+                    circleClass += isCurrent ? "bg-textMain border-textMain shadow-[0_0_10px_rgba(var(--rgb-text-main),0.2)] text-background" : "bg-surface border-borderMain text-textMuted shadow-sm";
                 }
 
                 vibhagBeats.push(
-                    <div key={`beat-${beatCounter}`} className="flex flex-col items-center gap-2">
+                    <div key={`beat-${beatCounter}`} className="flex flex-col items-center gap-3">
                         <motion.div 
                             className={circleClass}
                             animate={{
-                                scale: isCurrent ? 1.2 : 1,
+                                scale: isCurrent ? 1.15 : 1,
                                 opacity: isCurrent ? 1 : 0.8
                             }}
                             transition={{
@@ -147,10 +147,10 @@ function App() {
                                 damping: 15
                             }}
                         >
-                            {i === 0 && vibhag.type === 'khali' && <span className="text-xs">०</span>}
-                            {i === 0 && vibhag.type !== 'khali' && <span className="text-xs font-bold text-background opacity-0">X</span>}
+                            {i === 0 && vibhag.type === 'khali' && <span className="text-sm font-bold opacity-70">०</span>}
+                            {i === 0 && vibhag.type !== 'khali' && <span className="text-sm font-bold opacity-0">X</span>}
                         </motion.div>
-                        <span className={`text-xs md:text-sm transition-colors ${taal.tradition === 'Hindustani' ? 'font-devanagari' : 'font-sans font-bold'} ${isCurrent ? 'text-primary' : 'text-textMuted'}`}>
+                        <span className={`text-sm md:text-base transition-all ${taal.tradition === 'Hindustani' ? 'font-devanagari font-bold' : 'font-sans font-bold'} ${isCurrent ? 'text-primary scale-110 drop-shadow-md' : 'text-textMuted'}`}>
                             {taal.tradition === 'Hindustani' ? taal.theka_devanagari[beatCounter - 1] : taal.theka[beatCounter - 1]}
                         </span>
                     </div>
@@ -159,7 +159,7 @@ function App() {
             }
             
             elements.push(
-                <div key={`vibhag-${vIndex}`} className="flex items-center gap-2 md:gap-4 p-2 bg-surfaceHover/30 rounded-xl border border-borderFaint">
+                <div key={`vibhag-${vIndex}`} className="flex items-center gap-3 md:gap-5 p-3 md:p-4 bg-surface/60 rounded-3xl border border-borderFaint shadow-sm backdrop-blur-sm">
                     {vibhagBeats}
                 </div>
             );
@@ -280,7 +280,7 @@ function App() {
                             </div>
                             <div className="min-w-[120px]">
                                 <p className="text-textMuted text-sm font-medium tracking-widest uppercase mb-1">Bol</p>
-                                <p className="text-5xl font-bold font-devanagari text-primary">{currentBol?.hi || '--'}</p>
+                                <p className="text-5xl font-bold font-devanagari text-primary drop-shadow-sm">{currentBol?.hi || '--'}</p>
                             </div>
                             <div>
                                 <p className="text-textMuted text-sm font-medium tracking-widest uppercase mb-1">Avartan</p>

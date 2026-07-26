@@ -3,25 +3,33 @@
 @tailwind utilities;
 
 :root {
-  /* Dark mode (default) */
-  --rgb-background: 14, 15, 26;
-  --rgb-surface: 26, 27, 46;
-  --rgb-surface-hover: 37, 39, 64;
-  --rgb-primary: 240, 160, 60;
-  --rgb-secondary: 45, 212, 191;
-  --rgb-text-main: 255, 255, 255;
-  --rgb-text-muted: 156, 163, 175;
+  /* Premium Deep Dark Mode */
+  --rgb-background: 10, 12, 16;
+  --rgb-surface: 20, 24, 32;
+  --rgb-surface-hover: 30, 36, 48;
+  --rgb-primary: 245, 158, 11; /* Golden Amber */
+  --rgb-secondary: 20, 184, 166; /* Vibrant Teal */
+  --rgb-text-main: 243, 244, 246; /* Gray 100 */
+  --rgb-text-muted: 156, 163, 175; /* Gray 400 */
+  
+  --border-faint: rgba(255, 255, 255, 0.04);
+  --border-main: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.2);
 }
 
 .light-mode {
-  /* Light mode overrides (Creamy & warm, easier on eyes) */
-  --rgb-background: 247, 244, 235; /* Soft cream/off-white */
-  --rgb-surface: 255, 253, 249; /* Slightly warmer white for panels */
-  --rgb-surface-hover: 235, 230, 220; /* Subtle warm gray/cream hover */
-  --rgb-primary: 217, 119, 6;
-  --rgb-secondary: 13, 148, 136;
-  --rgb-text-main: 60, 54, 51; /* Softened dark gray/brown instead of harsh black */
-  --rgb-text-muted: 120, 113, 108;
+  /* Creamy High-Contrast Light Mode */
+  --rgb-background: 249, 246, 240; /* Very soft cream background */
+  --rgb-surface: 255, 255, 255; /* Pure white to pop against cream */
+  --rgb-surface-hover: 235, 230, 220; /* Slightly darker cream for hovers */
+  --rgb-primary: 217, 119, 6; /* Amber 600 */
+  --rgb-secondary: 13, 148, 136; /* Teal 600 */
+  --rgb-text-main: 41, 37, 36; /* Stone 800 - soft but highly legible */
+  --rgb-text-muted: 120, 113, 108; /* Stone 500 */
+
+  --border-faint: rgba(41, 37, 36, 0.06);
+  --border-main: rgba(41, 37, 36, 0.15);
+  --border-strong: rgba(41, 37, 36, 0.3);
 }
 
 @layer base {
@@ -43,5 +51,5 @@
 
 /* Utilities for layout */
 .glass-panel {
-  @apply bg-surface/80 backdrop-blur-md border border-borderMain rounded-2xl shadow-xl transition-colors duration-300;
+  @apply bg-surface/90 backdrop-blur-lg border border-borderMain rounded-3xl shadow-xl transition-colors duration-300;
 }
