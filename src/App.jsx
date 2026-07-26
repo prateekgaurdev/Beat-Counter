@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useMetronome } from './hooks/useMetronome';
-import { Play, Square, Volume2, VolumeX, Settings, Music, ChevronDown, Info, X, Sun, Moon, AudioLines } from 'lucide-react';
+import { Play, Square, Volume2, VolumeX, Settings, Music, ChevronDown, Info, X, Sun, Moon, Edit3, Save } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import YouTube from 'react-youtube';
 
 import { synth } from './engine/synth';
 
@@ -75,12 +76,58 @@ function MainApp({ dbData }) {
     const [selectedThaat, setSelectedThaat] = useState('all');
     const [raagSearch, setRaagSearch] = useState('');
     const [selectedRaagForModal, setSelectedRaagForModal] = useState(null);
+    const [isEditingRaag, setIsEditingRaag] = useState(false);
+    const [editedRaagData, setEditedRaagData] = useState({});
     
     // Riyaz Studio State
     const [tanpuraOn, setTanpuraOn] = useState(false);
     const [tanpuraTonic, setTanpuraTonic] = useState(146.83); // D
     const [practiceSeconds, setPracticeSeconds] = useState(0);
     const [isTimerRunning, setIsTimerRunning] = useState(false);
+    const [ytPlayer, setYtPlayer] = useState(null);
+
+    const [activeSargamNote, setActiveSargamNote] = useState(null);
+
+    const handleSaveRaagEdit = async () => {
+        try {
+            const res = await fetch(`http://localhost:3001/api/raags/${selectedRaagForModal.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(editedRaagData)
+            });
+            if (res.ok) {
+                const updatedRaag = await res.json();
+                
+                // Update local state to reflect changes instantly
+                setSelectedRaagForModal(updatedRaag);
+                setIsEditingRaag(false);
+                
+                // Update the main database array so it persists in the grid too
+                const updatedRaags = raags.map(r => r.id === updatedRaag.id ? updatedRaag : r);
+                
+                // If you passed down a setDbData function we could update the main cache here.
+                // Assuming it updates on reload for now, but local modal state is fixed instantly.
+            } else {
+                console.error("Failed to save changes");
+            }
+        } catch(e) {
+            console.error("Error saving edit:", e);
+        }
+    };
+    const ytScaleMap = {
+        '130.81': 'gvgFhc3znTk', // C
+        '138.59': 'e66mCMLj7yI', // C#
+        '146.83': 'gmvJK05arjo', // D
+        '155.56': 'yYaYj7B3S2A', // D#
+        '164.81': '0cG-y9hjmn8', // E
+        '174.61': 'sR5vOoqYnQY', // F
+        '185.00': 'Hs6Np_H5yOk', // F#
+        '196.00': '_xUDgVV9qmo', // G
+        '207.65': '5lmrTaApMYI', // G#
+        '220.00': '84gfqGXxpDE', // A
+        '233.08': 'SgTq2JzhRi4', // A#
+        '246.94': 'gcfRIrxl0Rw'  // B
+    };
 
     // Theme State
     const [isLightMode, setIsLightMode] = useState(() => {
@@ -109,13 +156,47 @@ function MainApp({ dbData }) {
         return () => clearInterval(interval);
     }, [isTimerRunning]);
 
+    const tanpuraFadeIntervalRef = useRef(null);
+
     useEffect(() => {
-        if (tanpuraOn) {
-            synth.startTanpura(tanpuraTonic);
-        } else {
-            synth.stopTanpura();
+        if (ytPlayer) {
+            // Clear any existing fade intervals
+            if (tanpuraFadeIntervalRef.current) {
+                clearInterval(tanpuraFadeIntervalRef.current);
+            }
+
+            if (tanpuraOn) {
+                ytPlayer.setVolume(0);
+                ytPlayer.playVideo();
+                
+                // Fade In
+                let vol = 0;
+                tanpuraFadeIntervalRef.current = setInterval(() => {
+                    vol += 5;
+                    if (vol >= 100) {
+                        ytPlayer.setVolume(100);
+                        clearInterval(tanpuraFadeIntervalRef.current);
+                    } else {
+                        ytPlayer.setVolume(vol);
+                    }
+                }, 50); // Ramp up over ~1 second
+
+            } else {
+                // Fade Out (3 seconds)
+                let vol = ytPlayer.getVolume();
+                tanpuraFadeIntervalRef.current = setInterval(() => {
+                    vol -= 2;
+                    if (vol <= 0) {
+                        ytPlayer.setVolume(0);
+                        ytPlayer.pauseVideo();
+                        clearInterval(tanpuraFadeIntervalRef.current);
+                    } else {
+                        ytPlayer.setVolume(vol);
+                    }
+                }, 60); // 50 steps of 60ms = 3000ms (3 seconds)
+            }
         }
-    }, [tanpuraOn, tanpuraTonic]);
+    }, [tanpuraOn, ytPlayer]);
 
     const formatTime = (totalSeconds) => {
         const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
@@ -157,6 +238,12 @@ function MainApp({ dbData }) {
         }
         setIsEditingBpm(false);
     };
+
+    // Performance Optimization: Memoize the heavily filtered Raag grid 
+    // so it doesn't recalculate and re-render every time the metronome beats/ticks
+    const filteredRaags = useMemo(() => {
+        return raags.filter(r => (selectedThaat === 'all' || r.thaat === selectedThaat) && r.name.toLowerCase().includes(raagSearch.toLowerCase()));
+    }, [raags, selectedThaat, raagSearch]);
 
     // Render Vibhag visualization
     const renderVisualizer = () => {
@@ -496,9 +583,7 @@ function MainApp({ dbData }) {
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
-                            {raags
-                                .filter(r => (selectedThaat === 'all' || r.thaat === selectedThaat) && r.name.toLowerCase().includes(raagSearch.toLowerCase()))
-                                .map(r => {
+                            {filteredRaags.map(r => {
                                     const hasAudio = (r.audios && r.audios.length > 0) || r.audioUrl;
                                     return (
                                         <div 
@@ -569,7 +654,13 @@ function MainApp({ dbData }) {
                                             <select 
                                                 className="bg-surface border border-borderMain py-2 px-4 rounded-xl focus:outline-none focus:border-primary"
                                                 value={tanpuraTonic}
-                                                onChange={(e) => setTanpuraTonic(parseFloat(e.target.value))}
+                                                onChange={(e) => {
+                                                    setTanpuraTonic(parseFloat(e.target.value));
+                                                    if (tanpuraOn) {
+                                                        setTanpuraOn(false); // Auto-pause while loading new track
+                                                        setTimeout(() => setTanpuraOn(true), 500);
+                                                    }
+                                                }}
                                             >
                                                 <option value="130.81">C</option>
                                                 <option value="138.59">C#</option>
@@ -596,6 +687,26 @@ function MainApp({ dbData }) {
                                         >
                                             {tanpuraOn ? 'Stop Tanpura' : 'Start Tanpura'}
                                         </button>
+
+                                        {/* Hidden YouTube Player for Tanpura */}
+                                        <div className="hidden">
+                                            <YouTube 
+                                                videoId={ytScaleMap[tanpuraTonic.toString()]}
+                                                opts={{
+                                                    playerVars: {
+                                                        autoplay: 0,
+                                                        loop: 1,
+                                                        playlist: ytScaleMap[tanpuraTonic.toString()], // required for looping single video
+                                                        controls: 0
+                                                    }
+                                                }}
+                                                onReady={(e) => setYtPlayer(e.target)}
+                                                onStateChange={(e) => {
+                                                    // Ensure it loops if it stops
+                                                    if (e.data === 0) e.target.playVideo();
+                                                }}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -650,15 +761,46 @@ function MainApp({ dbData }) {
                                         { label: 'm', ratio: 1.4142 }, { label: 'P', ratio: 1.4983 }, { label: 'd', ratio: 1.5874 },
                                         { label: 'D', ratio: 1.6818 }, { label: 'n', ratio: 1.7818 }, { label: 'N', ratio: 1.8877 },
                                         { label: "S'", ratio: 2 }
-                                    ].map(note => (
-                                        <button
-                                            key={note.label}
-                                            onClick={() => synth.playSargamNote(tanpuraTonic * note.ratio)}
-                                            className="w-12 h-12 md:w-16 md:h-16 flex items-center justify-center bg-surface border border-borderMain rounded-xl font-devanagari font-bold text-lg md:text-xl hover:bg-primary hover:text-background hover:border-primary transition-all active:scale-95"
-                                        >
-                                            {note.label}
-                                        </button>
-                                    ))}
+                                    ].map(note => {
+                                        const isActive = activeSargamNote === note.label;
+                                        return (
+                                            <button
+                                                key={note.label}
+                                                onClick={() => {
+                                                    if (isActive) {
+                                                        synth.stopSargamNote();
+                                                        setActiveSargamNote(null);
+                                                    } else {
+                                                        synth.playSargamNote(tanpuraTonic * note.ratio);
+                                                        setActiveSargamNote(note.label);
+                                                    }
+                                                }}
+                                                className={`w-12 h-12 md:w-16 md:h-16 flex items-center justify-center border rounded-xl font-devanagari font-bold text-lg md:text-xl transition-all active:scale-95 ${
+                                                    isActive 
+                                                    ? 'bg-primary text-background border-primary shadow-[0_0_15px_rgba(var(--rgb-primary),0.5)]' 
+                                                    : 'bg-surface border-borderMain text-textMain hover:bg-surfaceHover hover:border-primary/50'
+                                                }`}
+                                            >
+                                                {note.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <div className="mt-6 flex justify-center">
+                                    <button 
+                                        className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${
+                                            activeSargamNote 
+                                            ? 'bg-red-500/20 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/50' 
+                                            : 'bg-surfaceHover text-textMuted cursor-not-allowed opacity-50'
+                                        }`}
+                                        onClick={() => {
+                                            synth.stopSargamNote();
+                                            setActiveSargamNote(null);
+                                        }}
+                                        disabled={!activeSargamNote}
+                                    >
+                                        Stop Note
+                                    </button>
                                 </div>
                             </div>
 
@@ -766,7 +908,10 @@ function MainApp({ dbData }) {
                             <div className="p-4 md:p-8">
                                 <button 
                                     className="p-2 hover:bg-surfaceHover rounded-full transition-colors absolute top-4 right-4 z-50 bg-background/50 backdrop-blur-sm border border-borderMain text-textMain"
-                                    onClick={() => setSelectedRaagForModal(null)}
+                                    onClick={() => {
+                                        setSelectedRaagForModal(null);
+                                        setIsEditingRaag(false);
+                                    }}
                                 >
                                     <X className="w-5 h-5" />
                                 </button>
@@ -801,44 +946,106 @@ function MainApp({ dbData }) {
                                 </div>
 
                                 <section className="glass-panel mb-6 overflow-hidden">
-                                    <div className="px-6 py-4 border-b border-borderMain">
+                                    <div className="px-6 py-4 border-b border-borderMain flex justify-between items-center bg-surfaceHover/30">
                                         <h3 className="font-bold text-lg text-textMain">Attributes</h3>
+                                        {isEditingRaag ? (
+                                            <button 
+                                                onClick={handleSaveRaagEdit}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/20 text-primary border border-primary/30 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-primary/30 transition-colors"
+                                            >
+                                                <Save className="w-3.5 h-3.5" /> Save
+                                            </button>
+                                        ) : (
+                                            <button 
+                                                onClick={() => {
+                                                    setEditedRaagData(selectedRaagForModal);
+                                                    setIsEditingRaag(true);
+                                                }}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 bg-surfaceHover text-textMuted border border-borderMain rounded-lg text-xs font-bold uppercase tracking-wider hover:text-textMain transition-colors"
+                                            >
+                                                <Edit3 className="w-3.5 h-3.5" /> Edit
+                                            </button>
+                                        )}
                                     </div>
                                     <div className="p-6">
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4 text-sm">
-                                            <div><span className="text-primary/80 italic mr-1">Thaat:</span> <span className="font-medium text-textMain capitalize">{selectedRaagForModal.thaat}</span></div>
-                                            <div><span className="text-primary/80 italic mr-1">Thaat Notes:</span> <span className="font-medium text-textMain">{selectedRaagForModal.thaat_notes}</span></div>
-                                            <div><span className="text-primary/80 italic mr-1">Time:</span> <span className="font-medium text-textMain">{selectedRaagForModal.time}</span></div>
-                                            <div><span className="text-primary/80 italic mr-1">Prahar:</span> <span className="font-medium text-textMain">{selectedRaagForModal.prahar}</span></div>
-                                            <div><span className="text-primary/80 italic mr-1">Jati:</span> <span className="font-medium text-textMain">{selectedRaagForModal.jati}</span></div>
-                                            <div><span className="text-primary/80 italic mr-1">Vadi:</span> <span className="font-medium text-textMain">{selectedRaagForModal.vadi}</span></div>
-                                            <div><span className="text-primary/80 italic mr-1">Samvadi:</span> <span className="font-medium text-textMain">{selectedRaagForModal.samvadi}</span></div>
-                                            <div><span className="text-primary/80 italic mr-1">Saptak Pradhanata:</span> <span className="font-medium text-textMain">{selectedRaagForModal.saptak_pradhanata}</span></div>
-                                            <div><span className="text-primary/80 italic mr-1">Tanpura Tuning:</span> <span className="font-medium text-textMain">{selectedRaagForModal.tanpura_tuning}</span></div>
-                                        </div>
+                                        {isEditingRaag ? (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6 text-sm">
+                                                {[
+                                                    { key: 'thaat', label: 'Thaat' },
+                                                    { key: 'thaat_notes', label: 'Thaat Notes' },
+                                                    { key: 'time', label: 'Time' },
+                                                    { key: 'prahar', label: 'Prahar' },
+                                                    { key: 'jati', label: 'Jati' },
+                                                    { key: 'vadi', label: 'Vadi' },
+                                                    { key: 'samvadi', label: 'Samvadi' },
+                                                    { key: 'saptak_pradhanata', label: 'Saptak Pradhanata' },
+                                                    { key: 'tanpura_tuning', label: 'Tanpura Tuning' }
+                                                ].map(field => (
+                                                    <div key={field.key} className="flex flex-col gap-1.5">
+                                                        <label className="text-primary/80 italic text-xs">{field.label}:</label>
+                                                        <input 
+                                                            className="bg-background border border-borderMain rounded-md px-3 py-1.5 text-textMain focus:outline-none focus:border-primary/50"
+                                                            value={editedRaagData[field.key] || ''}
+                                                            onChange={(e) => setEditedRaagData({...editedRaagData, [field.key]: e.target.value})}
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-5 text-sm">
+                                                <div><span className="text-primary/80 italic mr-1">Thaat:</span> <span className="font-medium text-textMain capitalize">{selectedRaagForModal.thaat}</span></div>
+                                                <div><span className="text-primary/80 italic mr-1">Thaat Notes:</span> <span className="font-medium text-textMain">{selectedRaagForModal.thaat_notes}</span></div>
+                                                <div><span className="text-primary/80 italic mr-1">Time:</span> <span className="font-medium text-textMain">{selectedRaagForModal.time}</span></div>
+                                                <div><span className="text-primary/80 italic mr-1">Prahar:</span> <span className="font-medium text-textMain">{selectedRaagForModal.prahar}</span></div>
+                                                <div><span className="text-primary/80 italic mr-1">Jati:</span> <span className="font-medium text-textMain">{selectedRaagForModal.jati}</span></div>
+                                                <div><span className="text-primary/80 italic mr-1">Vadi:</span> <span className="font-medium text-textMain">{selectedRaagForModal.vadi}</span></div>
+                                                <div><span className="text-primary/80 italic mr-1">Samvadi:</span> <span className="font-medium text-textMain">{selectedRaagForModal.samvadi}</span></div>
+                                                <div><span className="text-primary/80 italic mr-1">Saptak Pradhanata:</span> <span className="font-medium text-textMain">{selectedRaagForModal.saptak_pradhanata}</span></div>
+                                                <div><span className="text-primary/80 italic mr-1">Tanpura Tuning:</span> <span className="font-medium text-textMain">{selectedRaagForModal.tanpura_tuning}</span></div>
+                                            </div>
+                                        )}
                                     </div>
                                 </section>
 
                                 <section className="glass-panel mb-6 overflow-hidden">
-                                    <div className="px-6 py-4 border-b border-borderMain flex justify-between items-center">
+                                    <div className="px-6 py-4 border-b border-borderMain flex justify-between items-center bg-surfaceHover/30">
                                         <h3 className="font-bold text-lg text-textMain">Aroh / Avaroh / Pakar</h3>
                                         <span className="text-[0.65rem] tracking-[0.15em] uppercase text-primary cursor-pointer hover:underline">Notation Help</span>
                                     </div>
                                     <div className="p-6">
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
-                                            <div>
-                                                <span className="text-[0.65rem] tracking-[0.15em] uppercase text-textMuted block mb-2">Aroh</span>
-                                                <span className="font-mono text-base text-textMain">{selectedRaagForModal.aroh}</span>
+                                        {isEditingRaag ? (
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
+                                                {[
+                                                    { key: 'aroh', label: 'Aroh' },
+                                                    { key: 'avroh', label: 'Avaroh' },
+                                                    { key: 'pakad', label: 'Pakar' }
+                                                ].map(field => (
+                                                    <div key={field.key} className="flex flex-col gap-2">
+                                                        <span className="text-[0.65rem] tracking-[0.15em] uppercase text-textMuted font-bold">{field.label}</span>
+                                                        <textarea 
+                                                            className="bg-background border border-borderMain rounded-lg p-3 text-textMain font-mono text-sm min-h-[80px] focus:outline-none focus:border-primary/50 resize-none"
+                                                            value={editedRaagData[field.key] || ''}
+                                                            onChange={(e) => setEditedRaagData({...editedRaagData, [field.key]: e.target.value})}
+                                                        />
+                                                    </div>
+                                                ))}
                                             </div>
-                                            <div>
-                                                <span className="text-[0.65rem] tracking-[0.15em] uppercase text-textMuted block mb-2">Avaroh</span>
-                                                <span className="font-mono text-base text-textMain">{selectedRaagForModal.avroh}</span>
+                                        ) : (
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
+                                                <div>
+                                                    <span className="text-[0.65rem] tracking-[0.15em] uppercase text-textMuted font-bold block mb-3">Aroh</span>
+                                                    <span className="font-mono text-base text-textMain tracking-wide">{selectedRaagForModal.aroh}</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[0.65rem] tracking-[0.15em] uppercase text-textMuted font-bold block mb-3">Avaroh</span>
+                                                    <span className="font-mono text-base text-textMain tracking-wide">{selectedRaagForModal.avroh}</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[0.65rem] tracking-[0.15em] uppercase text-textMuted font-bold block mb-3">Pakar</span>
+                                                    <span className="font-mono text-base text-textMain tracking-wide">{selectedRaagForModal.pakad}</span>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <span className="text-[0.65rem] tracking-[0.15em] uppercase text-textMuted block mb-2">Pakar</span>
-                                                <span className="font-mono text-base text-textMain">{selectedRaagForModal.pakad}</span>
-                                            </div>
-                                        </div>
+                                        )}
                                     </div>
                                 </section>
 

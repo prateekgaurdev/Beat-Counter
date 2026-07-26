@@ -9,9 +9,16 @@ class SurSynthEngine {
     this.buffers = {
       clickSam: null,
       clickOther: null,
-      tablaLoop: null
+      tablaLoop: null,
+      harmonium: null
     };
     this.currentTablaLoop = null;
+    
+    // Harmonium engine constants
+    this.HARMONIUM_SAMPLE_FREQ = 293.66; // D4 (MIDI 62)
+    this.HARMONIUM_LOOP_START = 1.2;
+    this.HARMONIUM_LOOP_END = 2.5;
+    this.activeHarmoniumNotes = new Map();
   }
 
   async loadBuffers() {
@@ -28,9 +35,19 @@ class SurSynthEngine {
         return null;
       }
     };
-    this.buffers.clickSam = await load(`${BASE_TABLA_URL}/metronome1.mp3`);
-    this.buffers.clickOther = await load(`${BASE_TABLA_URL}/metronome2.mp3`);
-    this.buffers.tablaLoop = await load(`${BASE_TABLA_URL}/MWV%20Tabla%20Loop%201.wav`);
+
+    // Fetch all audio buffers concurrently
+    const [clickSam, clickOther, tablaLoop, harmonium] = await Promise.all([
+      load(`${BASE_TABLA_URL}/metronome1.mp3`),
+      load(`${BASE_TABLA_URL}/metronome2.mp3`),
+      load(`${BASE_TABLA_URL}/MWV%20Tabla%20Loop%201.wav`),
+      load(`https://mojhivqchmrifaalrmsq.supabase.co/storage/v1/object/public/harmonium/harmonium-kannan-sustain.wav`)
+    ]);
+
+    this.buffers.clickSam = clickSam;
+    this.buffers.clickOther = clickOther;
+    this.buffers.tablaLoop = tablaLoop;
+    this.buffers.harmonium = harmonium;
   }
 
   getCtx() {
@@ -261,7 +278,70 @@ class SurSynthEngine {
 
   playSargamNote(freq) {
     const c = this.resume();
-    this.playTone(c, c.currentTime, { freq, dur: 0.9, type: 'sine', gain: 0.4, decay: 0.7 });
+    const now = c.currentTime;
+
+    // Stop any existing harmonium note
+    this.stopSargamNote();
+
+    // Use Authentic Harmonium Sample if loaded
+    if (this.buffers.harmonium) {
+      const source = c.createBufferSource();
+      source.buffer = this.buffers.harmonium;
+      source.loopStart = this.HARMONIUM_LOOP_START;
+      source.loopEnd = this.HARMONIUM_LOOP_END;
+      source.loop = true;
+      
+      // Calculate playback rate to pitch shift the D4 sample to the desired frequency
+      source.playbackRate.value = freq / this.HARMONIUM_SAMPLE_FREQ;
+
+      const gainNode = c.createGain();
+      // Smooth attack
+      gainNode.gain.setValueAtTime(0.001, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.8, now + 0.1);
+
+      source.connect(gainNode);
+      gainNode.connect(c.destination);
+      source.start(now);
+
+      // Save references so we can stop it later
+      this.currentHarmoniumSource = source;
+      this.currentHarmoniumGain = gainNode;
+      return;
+    }
+
+    // Fallback Synth if buffer isn't loaded
+    const osc = c.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, now);
+    
+    const amp = c.createGain();
+    amp.gain.setValueAtTime(0.0001, now);
+    amp.gain.exponentialRampToValueAtTime(0.4, now + 0.1);
+
+    osc.connect(amp).connect(c.destination);
+    osc.start(now);
+
+    this.currentHarmoniumSource = osc;
+    this.currentHarmoniumGain = amp;
+  }
+
+  stopSargamNote() {
+    if (this.currentHarmoniumGain && this.currentHarmoniumSource) {
+      const c = this.getCtx();
+      const now = c.currentTime;
+      
+      // Smooth release
+      this.currentHarmoniumGain.gain.cancelScheduledValues(now);
+      this.currentHarmoniumGain.gain.setValueAtTime(this.currentHarmoniumGain.gain.value, now);
+      this.currentHarmoniumGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+      
+      try {
+        this.currentHarmoniumSource.stop(now + 0.6);
+      } catch {}
+      
+      this.currentHarmoniumSource = null;
+      this.currentHarmoniumGain = null;
+    }
   }
 }
 
