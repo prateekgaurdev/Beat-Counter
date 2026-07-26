@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useMetronome } from './hooks/useMetronome';
-import { Play, Square, Volume2, VolumeX, Settings, Music, ChevronDown, Info, X } from 'lucide-react';
+import { Play, Square, Volume2, VolumeX, Settings, Music, ChevronDown, Info, X, Sun, Moon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { thaats } from './data/thaats';
@@ -15,7 +15,7 @@ function App() {
         soundOn, setSoundOn,
         soundPack, setSoundPack,
         subdivision, setSubdivision,
-        currentBeat, avartan
+        currentBeat, avartan, currentBol
     } = useMetronome('teentaal');
 
     const [isEditingBpm, setIsEditingBpm] = useState(false);
@@ -33,6 +33,21 @@ function App() {
     const [tanpuraTonic, setTanpuraTonic] = useState(146.83); // D
     const [practiceSeconds, setPracticeSeconds] = useState(0);
     const [isTimerRunning, setIsTimerRunning] = useState(false);
+
+    // Theme State
+    const [isLightMode, setIsLightMode] = useState(() => {
+        return localStorage.getItem('theme') === 'light';
+    });
+
+    useEffect(() => {
+        if (isLightMode) {
+            document.documentElement.classList.add('light-mode');
+            localStorage.setItem('theme', 'light');
+        } else {
+            document.documentElement.classList.remove('light-mode');
+            localStorage.setItem('theme', 'dark');
+        }
+    }, [isLightMode]);
 
     useEffect(() => {
         setBpmInputValue(bpm);
@@ -109,9 +124,9 @@ function App() {
                 let circleClass = "w-6 h-6 md:w-8 md:h-8 rounded-full border-2 transition-all duration-150 flex items-center justify-center ";
                 
                 if (vibhag.type === 'sam' && i === 0) {
-                    circleClass += isCurrent ? "bg-primary border-primary shadow-[0_0_15px_#F0A03C]" : "bg-surfaceHover border-primary text-primary";
+                    circleClass += isCurrent ? "bg-primary border-primary shadow-[0_0_15px_rgba(var(--rgb-primary),1)]" : "bg-surfaceHover border-primary text-primary";
                 } else if (vibhag.type === 'tali' && i === 0) {
-                    circleClass += isCurrent ? "bg-secondary border-secondary shadow-[0_0_10px_#2DD4BF]" : "bg-transparent border-secondary text-secondary";
+                    circleClass += isCurrent ? "bg-secondary border-secondary shadow-[0_0_10px_rgba(var(--rgb-secondary),1)]" : "bg-transparent border-secondary text-secondary";
                 } else if (vibhag.type === 'khali' && i === 0) {
                     circleClass += isCurrent ? "bg-surfaceHover border-textMuted" : "bg-transparent border-dashed border-textMuted text-textMuted";
                 } else {
@@ -144,7 +159,7 @@ function App() {
             }
             
             elements.push(
-                <div key={`vibhag-${vIndex}`} className="flex items-center gap-2 md:gap-4 p-2 bg-surfaceHover/30 rounded-xl border border-white/5">
+                <div key={`vibhag-${vIndex}`} className="flex items-center gap-2 md:gap-4 p-2 bg-surfaceHover/30 rounded-xl border border-borderFaint">
                     {vibhagBeats}
                 </div>
             );
@@ -156,12 +171,22 @@ function App() {
     return (
         <div className="min-h-screen bg-background text-textMain flex flex-col items-center justify-center p-4 selection:bg-primary/30 font-sans">
             
-            <header className="fixed top-0 w-full p-4 flex flex-col md:flex-row justify-between items-center max-w-5xl z-30 bg-background/90 backdrop-blur-md border-b border-white/5">
-                <div className="flex items-center gap-2 mb-4 md:mb-0">
-                    <div className="w-10 h-10 flex items-center justify-center rounded-full bg-primary/10 text-primary">
-                        <Music className="w-5 h-5" />
+            <header className="fixed top-0 w-full p-4 flex flex-col md:flex-row justify-between items-center max-w-5xl z-30 bg-background/90 backdrop-blur-md border-b border-borderFaint">
+                <div className="flex items-center justify-between w-full md:w-auto">
+                    <div className="flex items-center gap-2 mb-4 md:mb-0">
+                        <div className="w-10 h-10 flex items-center justify-center rounded-full bg-primary/10 text-primary">
+                            <Music className="w-5 h-5" />
+                        </div>
+                        <h1 className="text-xl font-bold tracking-wider">TAAL<span className="text-primary font-light">FORGE</span></h1>
                     </div>
-                    <h1 className="text-xl font-bold tracking-wider">TAAL<span className="text-primary font-light">FORGE</span></h1>
+                    
+                    <button 
+                        onClick={() => setIsLightMode(!isLightMode)}
+                        className="md:hidden p-2 rounded-full hover:bg-surfaceHover text-textMuted hover:text-textMain transition-colors mb-4"
+                        title="Toggle Theme"
+                    >
+                        {isLightMode ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+                    </button>
                 </div>
                 
                 <nav className="flex gap-2 overflow-x-auto pb-2 md:pb-0 hide-scrollbar w-full md:w-auto px-4 md:px-0">
@@ -181,6 +206,14 @@ function App() {
                             {tab.label}
                         </button>
                     ))}
+                    
+                    <button 
+                        onClick={() => setIsLightMode(!isLightMode)}
+                        className="hidden md:flex items-center justify-center ml-2 p-2 rounded-full hover:bg-surfaceHover text-textMuted hover:text-textMain transition-colors"
+                        title="Toggle Theme"
+                    >
+                        {isLightMode ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+                    </button>
                 </nav>
             </header>
 
@@ -194,7 +227,7 @@ function App() {
                             <div className="relative group z-10 w-full flex gap-2">
                                 <div className="relative w-full">
                                     <select 
-                                        className="w-full bg-surface border border-white/10 text-xl font-bold py-4 px-6 rounded-2xl appearance-none cursor-pointer hover:border-primary/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 text-center text-ellipsis"
+                                        className="w-full bg-surface border border-borderMain text-xl font-bold py-4 px-6 rounded-2xl appearance-none cursor-pointer hover:border-primary/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 text-center text-ellipsis"
                                         value={taal.id}
                                         onChange={(e) => setTaal(taals.find(t => t.id === e.target.value))}
                                     >
@@ -212,7 +245,7 @@ function App() {
                                     <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-textMuted pointer-events-none group-hover:text-primary transition-colors" />
                                 </div>
                                 <button 
-                                    className="bg-surface border border-white/10 p-4 rounded-2xl hover:border-primary/50 hover:text-primary transition-colors flex-shrink-0"
+                                    className="bg-surface border border-borderMain p-4 rounded-2xl hover:border-primary/50 hover:text-primary transition-colors flex-shrink-0"
                                     onClick={() => setShowInfoModal(true)}
                                     title="Taal Information"
                                 >
@@ -221,7 +254,7 @@ function App() {
                             </div>
                             <div className="relative w-full md:w-48 flex-shrink-0">
                                 <select 
-                                    className="w-full bg-surface border border-white/10 py-4 px-6 rounded-2xl appearance-none cursor-pointer hover:border-primary/50 transition-colors focus:outline-none text-textMuted hover:text-textMain text-center"
+                                    className="w-full bg-surface border border-borderMain py-4 px-6 rounded-2xl appearance-none cursor-pointer hover:border-primary/50 transition-colors focus:outline-none text-textMuted hover:text-textMain text-center"
                                     value={soundPack}
                                     onChange={(e) => setSoundPack(e.target.value)}
                                 >
@@ -239,15 +272,35 @@ function App() {
                             {renderVisualizer()}
                         </div>
 
-                        {/* Counters */}
-                        <div className="flex gap-16 text-center">
+                        {/* Counters & Timer */}
+                        <div className="flex flex-wrap justify-center gap-8 md:gap-16 text-center w-full">
                             <div>
                                 <p className="text-textMuted text-sm font-medium tracking-widest uppercase mb-1">Beat</p>
                                 <p className="text-5xl font-bold tabular-nums text-primary">{currentBeat}</p>
                             </div>
+                            <div className="min-w-[120px]">
+                                <p className="text-textMuted text-sm font-medium tracking-widest uppercase mb-1">Bol</p>
+                                <p className="text-5xl font-bold font-devanagari text-primary">{currentBol?.hi || '--'}</p>
+                            </div>
                             <div>
                                 <p className="text-textMuted text-sm font-medium tracking-widest uppercase mb-1">Avartan</p>
                                 <p className="text-5xl font-bold tabular-nums text-secondary">{avartan}</p>
+                            </div>
+                            <div className="relative group">
+                                <p className="text-textMuted text-sm font-medium tracking-widest uppercase mb-1">Timer</p>
+                                <p 
+                                    className={`text-5xl font-bold tabular-nums cursor-pointer transition-colors ${isTimerRunning ? 'text-green-400' : 'text-textMuted hover:text-textMain'}`}
+                                    onClick={() => setIsTimerRunning(!isTimerRunning)}
+                                    title="Click to start/pause timer"
+                                >
+                                    {formatTime(practiceSeconds)}
+                                </p>
+                                <button 
+                                    onClick={() => { setIsTimerRunning(false); setPracticeSeconds(0); }}
+                                    className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-textMuted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                    Reset
+                                </button>
                             </div>
                         </div>
 
@@ -318,7 +371,7 @@ function App() {
                         {/* Action Bar */}
                         <div className="flex items-center gap-6 mt-4">
                             <button 
-                                className={`w-14 h-14 flex items-center justify-center rounded-full transition-colors border ${soundOn ? 'bg-surface border-white/10 text-textMain' : 'bg-surfaceHover border-transparent text-textMuted'}`}
+                                className={`w-14 h-14 flex items-center justify-center rounded-full transition-colors border ${soundOn ? 'bg-surface border-borderMain text-textMain' : 'bg-surfaceHover border-transparent text-textMuted'}`}
                                 onClick={() => setSoundOn(!soundOn)}
                                 title="Toggle Sound"
                             >
@@ -328,7 +381,7 @@ function App() {
                             <button 
                                 className={`w-24 h-24 flex items-center justify-center rounded-full transition-all duration-300 shadow-xl ${
                                     (isPlaying && !stopRequested) 
-                                    ? 'bg-red-500/10 border-2 border-red-500 text-red-500 hover:bg-red-500 hover:text-white shadow-red-500/20' 
+                                    ? 'bg-red-500/10 border-2 border-red-500 text-red-500 hover:bg-red-500 hover:text-textMain shadow-red-500/20' 
                                     : 'bg-primary border-2 border-primary text-background hover:bg-primary/90 hover:scale-105 shadow-primary/20'
                                 }`}
                                 onClick={togglePlay}
@@ -337,7 +390,7 @@ function App() {
                             </button>
 
                             <button 
-                                className="w-14 h-14 flex items-center justify-center rounded-full bg-surface border border-white/10 hover:border-primary/50 transition-colors text-sm font-bold tracking-widest active:bg-primary/20"
+                                className="w-14 h-14 flex items-center justify-center rounded-full bg-surface border border-borderMain hover:border-primary/50 transition-colors text-sm font-bold tracking-widest active:bg-primary/20"
                                 onClick={handleTapTempo}
                             >
                                 TAP
@@ -359,7 +412,7 @@ function App() {
                         <div className="flex flex-wrap justify-center gap-2 mb-4">
                             <button 
                                 onClick={() => setSelectedThaat('all')}
-                                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${selectedThaat === 'all' ? 'bg-primary text-background' : 'bg-surface border border-white/10 hover:border-primary/50'}`}
+                                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${selectedThaat === 'all' ? 'bg-primary text-background' : 'bg-surface border border-borderMain hover:border-primary/50'}`}
                             >
                                 All Thaats
                             </button>
@@ -367,7 +420,7 @@ function App() {
                                 <button 
                                     key={t.id}
                                     onClick={() => setSelectedThaat(t.id)}
-                                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${selectedThaat === t.id ? 'bg-primary text-background' : 'bg-surface border border-white/10 hover:border-primary/50'}`}
+                                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${selectedThaat === t.id ? 'bg-primary text-background' : 'bg-surface border border-borderMain hover:border-primary/50'}`}
                                 >
                                     {t.name}
                                 </button>
@@ -432,7 +485,7 @@ function App() {
                                         <div className="flex items-center gap-4">
                                             <span className="text-textMuted text-sm font-bold uppercase tracking-widest">Tonic (Sa)</span>
                                             <select 
-                                                className="bg-surface border border-white/10 py-2 px-4 rounded-xl focus:outline-none focus:border-primary"
+                                                className="bg-surface border border-borderMain py-2 px-4 rounded-xl focus:outline-none focus:border-primary"
                                                 value={tanpuraTonic}
                                                 onChange={(e) => setTanpuraTonic(parseFloat(e.target.value))}
                                             >
@@ -455,7 +508,7 @@ function App() {
                                             onClick={() => setTanpuraOn(!tanpuraOn)}
                                             className={`px-8 py-4 rounded-full font-bold transition-all ${
                                                 tanpuraOn 
-                                                ? 'bg-red-500/20 text-red-500 border border-red-500 hover:bg-red-500 hover:text-white' 
+                                                ? 'bg-red-500/20 text-red-500 border border-red-500 hover:bg-red-500 hover:text-textMain' 
                                                 : 'bg-primary text-background hover:bg-primary/90'
                                             }`}
                                         >
@@ -484,7 +537,7 @@ function App() {
                                             className={`px-6 py-3 rounded-full font-bold transition-colors ${
                                                 isTimerRunning
                                                 ? 'bg-red-500/20 text-red-500 border border-red-500'
-                                                : 'bg-surface border border-white/10 hover:border-secondary hover:text-secondary'
+                                                : 'bg-surface border border-borderMain hover:border-secondary hover:text-secondary'
                                             }`}
                                         >
                                             {isTimerRunning ? 'Pause' : 'Start'}
@@ -494,7 +547,7 @@ function App() {
                                                 setIsTimerRunning(false);
                                                 setPracticeSeconds(0);
                                             }}
-                                            className="px-6 py-3 rounded-full font-bold bg-surface border border-white/10 hover:border-white/30 transition-colors"
+                                            className="px-6 py-3 rounded-full font-bold bg-surface border border-borderMain hover:border-borderStrong transition-colors"
                                         >
                                             Reset
                                         </button>
@@ -519,7 +572,7 @@ function App() {
                                         <button
                                             key={note.label}
                                             onClick={() => synth.playSargamNote(tanpuraTonic * note.ratio)}
-                                            className="w-12 h-12 md:w-16 md:h-16 flex items-center justify-center bg-surface border border-white/10 rounded-xl font-devanagari font-bold text-lg md:text-xl hover:bg-primary hover:text-background hover:border-primary transition-all active:scale-95"
+                                            className="w-12 h-12 md:w-16 md:h-16 flex items-center justify-center bg-surface border border-borderMain rounded-xl font-devanagari font-bold text-lg md:text-xl hover:bg-primary hover:text-background hover:border-primary transition-all active:scale-95"
                                         >
                                             {note.label}
                                         </button>
@@ -542,7 +595,7 @@ function App() {
                             onClick={() => setShowInfoModal(false)}
                         />
                         <motion.div 
-                            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-surface border border-white/10 p-6 md:p-8 rounded-3xl shadow-2xl z-50 max-h-[90vh] overflow-y-auto"
+                            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-surface border border-borderMain p-6 md:p-8 rounded-3xl shadow-2xl z-50 max-h-[90vh] overflow-y-auto"
                             initial={{ opacity: 0, scale: 0.95, y: '-45%', x: '-50%' }}
                             animate={{ opacity: 1, scale: 1, y: '-50%', x: '-50%' }}
                             exit={{ opacity: 0, scale: 0.95, y: '-45%', x: '-50%' }}
@@ -566,7 +619,7 @@ function App() {
                             </div>
 
                             <div className="space-y-6 text-textMuted">
-                                <div className="bg-surfaceHover/50 p-4 rounded-xl border border-white/5">
+                                <div className="bg-surfaceHover/50 p-4 rounded-xl border border-borderFaint">
                                     <p className="text-sm uppercase tracking-widest font-bold text-textMain mb-2">Theka Structure</p>
                                     <p className="text-lg text-primary font-medium tracking-wider">{taal.theka_display}</p>
                                     {taal.anga_structure && (

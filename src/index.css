@@ -2,9 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Dark mode (default) */
+  --rgb-background: 14, 15, 26;
+  --rgb-surface: 26, 27, 46;
+  --rgb-surface-hover: 37, 39, 64;
+  --rgb-primary: 240, 160, 60;
+  --rgb-secondary: 45, 212, 191;
+  --rgb-text-main: 255, 255, 255;
+  --rgb-text-muted: 156, 163, 175;
+}
+
+.light-mode {
+  /* Light mode overrides (Creamy & warm, easier on eyes) */
+  --rgb-background: 247, 244, 235; /* Soft cream/off-white */
+  --rgb-surface: 255, 253, 249; /* Slightly warmer white for panels */
+  --rgb-surface-hover: 235, 230, 220; /* Subtle warm gray/cream hover */
+  --rgb-primary: 217, 119, 6;
+  --rgb-secondary: 13, 148, 136;
+  --rgb-text-main: 60, 54, 51; /* Softened dark gray/brown instead of harsh black */
+  --rgb-text-muted: 120, 113, 108;
+}
+
 @layer base {
   body {
-    @apply bg-background text-textMain font-sans antialiased overflow-x-hidden;
+    @apply bg-background text-textMain font-sans antialiased overflow-x-hidden transition-colors duration-300;
   }
 }
 
@@ -21,5 +43,5 @@
 
 /* Utilities for layout */
 .glass-panel {
-  @apply bg-surface/80 backdrop-blur-md border border-white/10 rounded-2xl shadow-xl;
+  @apply bg-surface/80 backdrop-blur-md border border-borderMain rounded-2xl shadow-xl transition-colors duration-300;
 }

@@ -51,11 +51,15 @@ export class MetronomeEngine {
   async init() {
     // We now use the shared synth context
     this.audioContext = synth.getCtx();
+    await synth.loadBuffers();
   }
 
   setTaal(taal) {
     this.taal = taal;
     this.bpm = taal.default_bpm;
+    if (this.soundPack === 'tabla' && taal.id !== 'teentaal') {
+      synth.stopTablaLoop();
+    }
   }
 
   setBpm(bpm) {
@@ -63,11 +67,20 @@ export class MetronomeEngine {
   }
 
   setSubdivision(sub) {
+    if (this.subdivision === sub) return;
+    
+    // Scale currentBeat to maintain position in the avartan
+    const ratio = sub / this.subdivision;
+    this.currentBeat = Math.floor(this.currentBeat * ratio);
+    
     this.subdivision = sub;
   }
   
   setSoundPack(pack) {
     this.soundPack = pack;
+    if (pack !== 'tabla' || (this.taal && this.taal.id !== 'teentaal')) {
+      synth.stopTablaLoop();
+    }
   }
 
   onBeat(callback) {
@@ -92,11 +105,18 @@ export class MetronomeEngine {
     return 'normal';
   }
 
-  playNote(time, type, bol) {
+  playNote(time, type, bol, isSub, mainBeatIndex) {
     if (!this.soundOn || !this.audioContext) return;
     
-    // Use synth engine instead of buffers
-    synth.playBol(this.soundPack, bol, time, type);
+    if (this.soundPack === 'tabla') {
+      if (!isSub && mainBeatIndex === 0) {
+        synth.playTablaLoop(time, this.bpm, this.subdivision);
+      }
+    } else if (this.soundPack === 'click') {
+      if (!isSub) synth.playSampledClick(time, type);
+    } else {
+      synth.playBol(this.soundPack, bol, time, type);
+    }
   }
 
   nextNote() {
@@ -118,28 +138,46 @@ export class MetronomeEngine {
     const isSub = beatNumber % this.subdivision !== 0;
     const mainBeatIndex = Math.floor(beatNumber / this.subdivision);
     
-    let type = 'sub';
-    let bol = 'Ta';
-
+    let type = 'normal';
     if (!isSub) {
       type = this.getBeatType(mainBeatIndex);
-      bol = this.taal && this.taal.theka ? this.taal.theka[mainBeatIndex] : 'Ta';
+    } else {
+      type = 'sub';
+    }
+
+    let bol = 'Ta';
+    let bol_hi = '';
+    
+    // For proper Layakari, cycle the bol text with every sub-beat tick
+    if (this.taal && this.taal.theka && this.taal.theka.length > 0) {
+      bol = this.taal.theka[beatNumber % this.taal.theka.length];
+      bol_hi = this.taal.theka_devanagari ? this.taal.theka_devanagari[beatNumber % this.taal.theka_devanagari.length] : bol;
+    } else {
+      bol = (mainBeatIndex + 1).toString();
+      bol_hi = bol;
     }
 
     // Schedule audio
-    this.playNote(time, type, bol);
-
-    // Only notify UI for main beats to keep UI simple, or pass subdivision info
-    if (!isSub) {
-      this.onBeatListeners.forEach(cb => cb({
-        beat: mainBeatIndex, 
-        avartan: this.currentAvartan, 
-        time: time,
-        type: type,
-        bol: bol,
-        bol_hi: this.taal && this.taal.theka_devanagari ? this.taal.theka_devanagari[mainBeatIndex] : ''
-      }));
+    if (this.soundPack === 'tabla' && this.taal && this.taal.id === 'teentaal') {
+      // Start or resync the loop if parameters changed
+      if (!synth.currentTablaLoop || synth.lastTablaBpm !== this.bpm || synth.lastTablaSubdivision !== this.subdivision) {
+        synth.playTablaLoop(time, this.bpm, this.subdivision, beatNumber / this.subdivision);
+      }
+    } else if (this.soundPack === 'click') {
+      synth.playSampledClick(time, type);
+    } else {
+      synth.playBol(this.soundPack, bol, time, type);
     }
+
+    // Notify UI for ALL beats to keep bol updates in sync with Layakari speed
+    this.onBeatListeners.forEach(cb => cb({
+      beat: mainBeatIndex, 
+      avartan: this.currentAvartan, 
+      time: time,
+      type: type,
+      bol: bol,
+      bol_hi: bol_hi
+    }));
   }
 
   scheduler() {
@@ -150,6 +188,7 @@ export class MetronomeEngine {
       this.isPlaying = false;
       this.stopRequested = false;
       this.worker.postMessage('stop');
+      synth.stopTablaLoop();
       this.onBeatListeners.forEach(cb => cb({ stopped: true }));
       return;
     }
@@ -183,6 +222,7 @@ export class MetronomeEngine {
       this.isPlaying = false;
       this.stopRequested = false;
       this.worker.postMessage('stop');
+      synth.stopTablaLoop();
       this.onBeatListeners.forEach(cb => cb({ stopped: true }));
     } else {
       this.stopRequested = true;

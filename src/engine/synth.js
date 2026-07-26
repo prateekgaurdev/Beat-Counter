@@ -6,6 +6,29 @@ class SurSynthEngine {
   constructor() {
     this.ctx = null;
     this.tanpuraNodes = null;
+    this.buffers = {
+      clickSam: null,
+      clickOther: null,
+      tablaLoop: null
+    };
+    this.currentTablaLoop = null;
+  }
+
+  async loadBuffers() {
+    const c = this.getCtx();
+    const load = async (url) => {
+      try {
+        const res = await fetch(url);
+        const arrayBuffer = await res.arrayBuffer();
+        return await c.decodeAudioData(arrayBuffer);
+      } catch (e) {
+        console.error("Failed to load", url, e);
+        return null;
+      }
+    };
+    this.buffers.clickSam = await load('/metronome1.mp3');
+    this.buffers.clickOther = await load('/metronome2.mp3');
+    this.buffers.tablaLoop = await load('/MWV Tabla Loop 1.wav');
   }
 
   getCtx() {
@@ -112,6 +135,64 @@ class SurSynthEngine {
     };
   }
 
+  playTablaLoop(time, bpm, subdivision = 1, offsetBeats = 0) {
+    if (!this.buffers.tablaLoop) return;
+    const c = this.getCtx();
+    
+    if (this.currentTablaLoop) {
+      try { this.currentTablaLoop.stop(time); } catch {}
+    }
+    
+    const source = c.createBufferSource();
+    source.buffer = this.buffers.tablaLoop;
+    source.loop = true; 
+    // The original loop is essentially at 200 BPM effective matra rate (2 syllables per beat at 100BPM).
+    source.playbackRate.value = (bpm * subdivision) / 200;
+    
+    const gainNode = c.createGain();
+    gainNode.gain.value = 1.0;
+    
+    source.connect(gainNode);
+    gainNode.connect(c.destination);
+    
+    // 1 matra at 200 BPM = 0.3 seconds.
+    const offsetSeconds = (offsetBeats % 16) * 0.3;
+    source.start(time, offsetSeconds);
+    
+    this.currentTablaLoop = source;
+    this.lastTablaBpm = bpm;
+    this.lastTablaSubdivision = subdivision;
+  }
+
+  stopTablaLoop() {
+    if (this.currentTablaLoop) {
+      try { this.currentTablaLoop.stop(); } catch {}
+      this.currentTablaLoop = null;
+    }
+  }
+
+  updateTablaLoopBpm(bpm, subdivision = 1) {
+    if (this.currentTablaLoop) {
+      const c = this.getCtx();
+      this.currentTablaLoop.playbackRate.setValueAtTime((bpm * subdivision) / 200, c.currentTime);
+    }
+  }
+
+  playSampledClick(time, type) {
+    const c = this.getCtx();
+    const buffer = (type === 'sam' || type === 'tali') ? this.buffers.clickSam : this.buffers.clickOther;
+    if (!buffer) return;
+    
+    const source = c.createBufferSource();
+    source.buffer = buffer;
+    const gainNode = c.createGain();
+    gainNode.gain.value = type === 'sub' ? 0.3 : 1.0;
+    
+    source.connect(gainNode);
+    gainNode.connect(c.destination);
+    source.start(time);
+  }
+
   playBol(kitName, bol, time, roleAccent) {
     const c = this.resume();
     const kits = this.getKits();
@@ -167,7 +248,7 @@ class SurSynthEngine {
     if (!this.tanpuraNodes) return;
     clearInterval(this.tanpuraNodes.pluckInterval);
     this.tanpuraNodes.nodes.forEach(n => {
-      try { n.osc.stop(); } catch (e) {}
+      try { n.osc.stop(); } catch {}
     });
     this.tanpuraNodes = null;
   }

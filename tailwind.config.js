@@ -7,13 +7,16 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: '#0E0F1A',
-        surface: '#1A1B2E',
-        surfaceHover: '#252740',
-        primary: '#F0A03C', // Saffron/amber for Sam
-        secondary: '#2DD4BF', // Teal for Tali
-        textMain: '#FFFFFF',
-        textMuted: '#9CA3AF'
+        background: 'rgba(var(--rgb-background), <alpha-value>)',
+        surface: 'rgba(var(--rgb-surface), <alpha-value>)',
+        surfaceHover: 'rgba(var(--rgb-surface-hover), <alpha-value>)',
+        primary: 'rgba(var(--rgb-primary), <alpha-value>)',
+        secondary: 'rgba(var(--rgb-secondary), <alpha-value>)',
+        textMain: 'rgba(var(--rgb-text-main), <alpha-value>)',
+        textMuted: 'rgba(var(--rgb-text-muted), <alpha-value>)',
+        borderFaint: 'rgba(var(--rgb-text-main), 0.05)',
+        borderMain: 'rgba(var(--rgb-text-main), 0.1)',
+        borderStrong: 'rgba(var(--rgb-text-main), 0.3)',
       },
       fontFamily: {
         sans: ['Inter', 'sans-serif'],
