@@ -49,10 +49,10 @@ function App() {
         );
     }
 
-    return <MainApp dbData={dbData} />;
+    return <MainApp dbData={dbData} updateDbData={setDbData} />;
 }
 
-function MainApp({ dbData }) {
+function MainApp({ dbData, updateDbData }) {
     const { taals, thaats, raags } = dbData;
 
     const {
@@ -107,31 +107,24 @@ function MainApp({ dbData }) {
 
     const [activeSargamNote, setActiveSargamNote] = useState(null);
 
-    const handleSaveRaagEdit = async () => {
-        try {
-            const res = await fetch(`http://localhost:3001/api/raags/${selectedRaagForModal.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(editedRaagData)
-            });
-            if (res.ok) {
-                const updatedRaag = await res.json();
-                
-                // Update local state to reflect changes instantly
-                setSelectedRaagForModal(updatedRaag);
-                setIsEditingRaag(false);
-                
-                // Update the main database array so it persists in the grid too
-                const updatedRaags = raags.map(r => r.id === updatedRaag.id ? updatedRaag : r);
-                
-                // If you passed down a setDbData function we could update the main cache here.
-                // Assuming it updates on reload for now, but local modal state is fixed instantly.
-            } else {
-                console.error("Failed to save changes");
-            }
-        } catch(e) {
-            console.error("Error saving edit:", e);
-        }
+    const handleSaveRaagEdit = () => {
+        // Optimistic UI Update: Instantly close edit mode and reflect changes locally
+        const optimisticRaag = { ...selectedRaagForModal, ...editedRaagData };
+        setSelectedRaagForModal(optimisticRaag);
+        setIsEditingRaag(false);
+        
+        // Update the main database array so it persists in the grid instantly
+        const updatedRaags = raags.map(r => r.id === optimisticRaag.id ? optimisticRaag : r);
+        const newData = { ...dbData, raags: updatedRaags };
+        updateDbData(newData);
+        localStorage.setItem('surtaal_db_cache', JSON.stringify(newData));
+
+        // Background sync to database
+        fetch(`http://localhost:3001/api/raags/${optimisticRaag.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(editedRaagData)
+        }).catch(e => console.error("Error background saving edit:", e));
     };
     const ytScaleMap = {
         '130.81': 'aI3m7T9_t04', // C
@@ -202,34 +195,40 @@ function MainApp({ dbData }) {
             }
 
             if (tanpuraOn) {
-                ytPlayer.setVolume(0);
-                ytPlayer.playVideo();
-                
                 // Fade In
+                try { ytPlayer.setVolume(0); ytPlayer.playVideo(); } catch(e) {}
+                
                 let vol = 0;
                 tanpuraFadeIntervalRef.current = setInterval(() => {
                     vol += 5;
                     if (vol >= 100) {
-                        ytPlayer.setVolume(100);
+                        try { ytPlayer.setVolume(100); } catch(e) {}
                         clearInterval(tanpuraFadeIntervalRef.current);
                     } else {
-                        ytPlayer.setVolume(vol);
+                        try { ytPlayer.setVolume(vol); } catch(e) {}
                     }
                 }, 50); // Ramp up over ~1 second
 
             } else {
-                // Fade Out (3 seconds)
-                let vol = ytPlayer.getVolume();
+                // Fade Out
+                let vol = 100;
+                try { vol = ytPlayer.getVolume(); } catch(e) {}
+                
+                // Prevent starting a fade out if already at 0
+                if (vol === 0 || !vol) {
+                    try { ytPlayer.pauseVideo(); } catch(e) {}
+                    return;
+                }
+                
                 tanpuraFadeIntervalRef.current = setInterval(() => {
-                    vol -= 2;
+                    vol -= 5; // Faster fade out to stay responsive
                     if (vol <= 0) {
-                        ytPlayer.setVolume(0);
-                        ytPlayer.pauseVideo();
+                        try { ytPlayer.setVolume(0); ytPlayer.pauseVideo(); } catch(e) {}
                         clearInterval(tanpuraFadeIntervalRef.current);
                     } else {
-                        ytPlayer.setVolume(vol);
+                        try { ytPlayer.setVolume(vol); } catch(e) {}
                     }
-                }, 60); // 50 steps of 60ms = 3000ms (3 seconds)
+                }, 40); 
             }
         }
     }, [tanpuraOn, ytPlayer]);
@@ -742,10 +741,15 @@ function MainApp({ dbData }) {
                                                 className="bg-surface border border-borderMain py-2 px-4 rounded-xl focus:outline-none focus:border-primary"
                                                 value={tanpuraTonic}
                                                 onChange={(e) => {
-                                                    setTanpuraTonic(parseFloat(e.target.value));
+                                                    const newTonic = parseFloat(e.target.value);
+                                                    setTanpuraTonic(newTonic);
                                                     if (tanpuraOn) {
-                                                        setTanpuraOn(false); // Auto-pause while loading new track
-                                                        setTimeout(() => setTanpuraOn(true), 500);
+                                                        // Instantly force load and play the new video without re-mounting the component
+                                                        try {
+                                                            if (ytPlayer && ytPlayer.loadVideoById) {
+                                                                ytPlayer.loadVideoById(ytScaleMap[newTonic.toString()]);
+                                                            }
+                                                        } catch(err) {}
                                                     }
                                                 }}
                                             >
@@ -755,10 +759,10 @@ function MainApp({ dbData }) {
                                                 <option value="155.56">D#</option>
                                                 <option value="164.81">E</option>
                                                 <option value="174.61">F</option>
-                                                <option value="185.00">F#</option>
-                                                <option value="196.00">G</option>
+                                                <option value="185">F#</option>
+                                                <option value="196">G</option>
                                                 <option value="207.65">G#</option>
-                                                <option value="220.00">A</option>
+                                                <option value="220">A</option>
                                                 <option value="233.08">A#</option>
                                                 <option value="246.94">B</option>
                                             </select>
@@ -776,29 +780,35 @@ function MainApp({ dbData }) {
                                         </button>
 
                                         {/* Hidden YouTube Player for Tanpura */}
-                                        <div className="absolute opacity-0 pointer-events-none w-0 h-0 overflow-hidden">
+                                        <div className="absolute opacity-0 pointer-events-none w-1 h-1 overflow-hidden">
                                             <YouTube 
                                                 videoId={ytScaleMap[tanpuraTonic.toString()]}
                                                 opts={{
                                                     playerVars: {
                                                         autoplay: 0,
-                                                        loop: 1,
-                                                        playlist: ytScaleMap[tanpuraTonic.toString()], // required for looping single video
                                                         controls: 0,
-                                                        playsinline: 1
+                                                        playsinline: 1,
+                                                        disablekb: 1,
+                                                        fs: 0,
+                                                        modestbranding: 1
                                                     }
                                                 }}
                                                 onReady={(e) => {
                                                     setYtPlayer(e.target);
+                                                    if (tanpuraOn) {
+                                                        try { e.target.setVolume(100); e.target.playVideo(); } catch(err) {}
+                                                    }
                                                 }}
                                                 onStateChange={(e) => {
-                                                    // State 0 is "Ended". Loop it instantly!
-                                                    if (e.data === 0) e.target.playVideo();
+                                                    // State 0 is "Ended". Seek to start and loop!
+                                                    if (e.data === 0) {
+                                                        try { e.target.seekTo(0); e.target.playVideo(); } catch(err) {}
+                                                    }
                                                     
-                                                    // Fix for browsers pausing unmuted invisible videos: 
-                                                    // sometimes it stays stuck in state 3 (buffering) or 2 (paused).
-                                                    if (tanpuraOn && (e.data === 2 || e.data === -1)) {
-                                                        e.target.playVideo();
+                                                    // Force play if browser aggressively pauses it or if it just cued a new scale
+                                                    // 2: Paused, -1: Unstarted, 5: Video cued
+                                                    if (tanpuraOn && (e.data === 2 || e.data === -1 || e.data === 5)) {
+                                                        try { e.target.setVolume(100); e.target.playVideo(); } catch(err) {}
                                                     }
                                                 }}
                                             />
@@ -1153,9 +1163,9 @@ function MainApp({ dbData }) {
 
                                 {selectedRaagForModal.recordings && selectedRaagForModal.recordings.length > 0 && (
                                     <section className="glass-panel mb-6 overflow-hidden">
-                                        <div className="px-6 py-4 border-b border-borderMain">
-                                            <h3 className="font-bold text-lg text-textMain">Recordings & Resources</h3>
-                                        </div>
+                                    <div className="px-6 py-4 border-b border-borderMain flex justify-between items-center bg-surfaceHover/30">
+                                        <h3 className="font-bold text-lg text-textMain">Recordings & Resources</h3>
+                                    </div>
                                         <div className="p-6 overflow-x-auto">
                                             <table className="w-full text-sm text-left">
                                                 <thead>
@@ -1185,9 +1195,9 @@ function MainApp({ dbData }) {
 
                                 {selectedRaagForModal.film_songs && selectedRaagForModal.film_songs.length > 0 && (
                                     <section className="glass-panel mb-6 overflow-hidden">
-                                        <div className="px-6 py-4 border-b border-borderMain">
-                                            <h3 className="font-bold text-lg text-textMain">Film Songs ({selectedRaagForModal.film_songs.length})</h3>
-                                        </div>
+                                    <div className="px-6 py-4 border-b border-borderMain flex justify-between items-center bg-surfaceHover/30">
+                                        <h3 className="font-bold text-lg text-textMain">Film Songs ({selectedRaagForModal.film_songs.length})</h3>
+                                    </div>
                                         <div className="p-6 overflow-x-auto">
                                             <table className="w-full text-sm text-left">
                                                 <thead>
