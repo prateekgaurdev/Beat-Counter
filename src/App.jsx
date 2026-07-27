@@ -131,6 +131,9 @@ function MainApp({ dbData, updateDbData }) {
         if (isPlaying && !stopRequested) {
             stopPlayImmediate();
             setTimeout(() => {
+                if (variationAudioRef.current) {
+                    variationAudioRef.current.currentTime = 0;
+                }
                 togglePlay(); // Restart
             }, 50);
         }
@@ -244,10 +247,13 @@ function MainApp({ dbData, updateDbData }) {
     // Resync audio to Sam to prevent long-term drift
     useEffect(() => {
         if (variationAudioRef.current && isPlaying && !stopRequested && selectedVariation) {
+            // Because of the 0.05s lookahead in the MetronomeEngine, we want the audio to sync precisely.
+            // But we don't want it to glitch repeatedly on beat 1 if React re-renders.
+            // So we only force a snap to 0 if the audio has drifted by more than 0.1 seconds from where it mathematically *should* be.
             if (currentBeat === 1) {
-                // If we are slightly off due to HTML5 audio buffer drift, forcefully snap back
-                // This ensures the visualizer and audio are perpetually locked on Sam
-                variationAudioRef.current.currentTime = 0;
+                if (variationAudioRef.current.currentTime > 0.15) {
+                    variationAudioRef.current.currentTime = 0;
+                }
             }
         }
     }, [avartan]);
@@ -455,8 +461,14 @@ function MainApp({ dbData, updateDbData }) {
         return () => clearTimeout(timer);
     });
 
+    const handlePlayClick = () => {
+        if (!isPlaying && variationAudioRef.current) {
+             variationAudioRef.current.currentTime = 0;
+        }
+        togglePlay();
+    };
+
     const handleBpmInputBlur = () => {
-        const parsed = parseInt(bpmInputValue, 10);
         if (!isNaN(parsed) && parsed >= 20 && parsed <= 400) {
             setBpm(parsed);
         } else {
@@ -901,7 +913,7 @@ function MainApp({ dbData, updateDbData }) {
                                         ? 'bg-red-500/10 border-2 border-red-500 text-red-500 hover:bg-red-500 hover:text-textMain shadow-red-500/20' 
                                         : 'bg-primary border-2 border-primary text-background hover:bg-primary/90 hover:scale-105 shadow-primary/20'
                                     }`}
-                                    onClick={togglePlay}
+                                    onClick={handlePlayClick}
                                     disabled={!isAudioLoaded && selectedVariation && soundPack === 'tabla'}
                                 >
                                     {(!isAudioLoaded && selectedVariation && soundPack === 'tabla') ? (
