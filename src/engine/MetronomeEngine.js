@@ -16,7 +16,7 @@ export class MetronomeEngine {
     this.taal = null; // will hold taal object
     this.subdivision = 1;
     this.soundPack = 'tabla';
-    this.soundOn = true;
+    this._soundOn = true;
     
     // State
     this.isPlaying = false;
@@ -46,6 +46,17 @@ export class MetronomeEngine {
       };
     `], { type: 'application/javascript' });
     return new Worker(URL.createObjectURL(blob));
+  }
+
+  get soundOn() {
+    return this._soundOn;
+  }
+
+  set soundOn(val) {
+    this._soundOn = val;
+    if (!val) {
+      synth.stopTablaLoop();
+    }
   }
 
   async init() {

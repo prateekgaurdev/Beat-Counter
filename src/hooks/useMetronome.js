@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { engine } from '../engine/MetronomeEngine';
 
-export function useMetronome(initialTaals, initialTaalId = 'teentaal') {
+export function useMetronome(initialTaals, initialTaalId = 'teentaal', isVariationActive = false) {
     const [taal, setTaal] = useState(initialTaals.find(t => t.id === initialTaalId) || initialTaals[0]);
     const [bpm, setBpm] = useState(taal.default_bpm);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -52,8 +52,8 @@ export function useMetronome(initialTaals, initialTaalId = 'teentaal') {
     }, [bpm]);
 
     useEffect(() => {
-        engine.soundOn = soundOn;
-    }, [soundOn]);
+        engine.soundOn = soundOn && !(isVariationActive && soundPack === 'tabla');
+    }, [soundOn, isVariationActive, soundPack]);
 
     useEffect(() => {
         engine.setSubdivision(subdivision);

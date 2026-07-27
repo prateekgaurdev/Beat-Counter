@@ -2,6 +2,13 @@ import express from 'express';
 import cors from 'cors';
 import compression from 'compression';
 import { PrismaClient } from '@prisma/client';
+import { execSync } from 'child_process';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const prisma = new PrismaClient();
 const app = express();
@@ -28,7 +35,11 @@ app.get('/api/thaats', cacheMiddleware, async (req, res) => {
 
 app.get('/api/taals', cacheMiddleware, async (req, res) => {
   try {
-    const taals = await prisma.taal.findMany();
+    const taals = await prisma.taal.findMany({
+      include: {
+        variations: true
+      }
+    });
     // Format back to nested name object for frontend compatibility
     const formatted = taals.map(t => ({
       ...t,
@@ -64,6 +75,47 @@ app.put('/api/raags/:id', async (req, res) => {
     console.error("Error updating raag:", error);
     res.status(500).json({ error: 'Failed to update raag' });
   }
+});
+
+app.put('/api/variations/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { originalBpm } = req.body;
+    
+    const updatedVar = await prisma.taalVariation.update({
+      where: { id },
+      data: { originalBpm: parseFloat(originalBpm) }
+    });
+    
+    res.json(updatedVar);
+  } catch (error) {
+    console.error("Error updating variation BPM:", error);
+    res.status(500).json({ error: 'Failed to update variation BPM' });
+  }
+});
+
+app.post('/api/trim', async (req, res) => {
+    try {
+        const { url, startTime } = req.body;
+        const decodedUrl = decodeURIComponent(url);
+        // Map frontend URL to absolute path
+        const filePath = path.join(__dirname, '../public', decodedUrl);
+        const tempPath = filePath.replace('.mp3', '_manual_trim.mp3');
+        
+        console.log(`Trimming ${filePath} starting at ${startTime}s`);
+        
+        // Re-encode to fix timestamps/duration headers after trimming
+        const FFMPEG = path.join(__dirname, '../node_modules/ffmpeg-static/ffmpeg.exe');
+        execSync(`"${FFMPEG}" -i "${filePath}" -ss ${startTime} -c:a libmp3lame -q:a 2 "${tempPath}" -y -loglevel error`);
+        
+        fs.copyFileSync(tempPath, filePath);
+        fs.unlinkSync(tempPath);
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Failed to trim audio:", error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
 const PORT = process.env.PORT || 3001;

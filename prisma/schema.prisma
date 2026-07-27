@@ -8,17 +8,18 @@ generator client {
 }
 
 model Thaat {
-  id           String @id
-  name         String
-  swaras       Json
-  nature       String
-  sample_raag  String
-  mood         String
-  raags        Raag[]
+  id          String @id
+  name        String
+  swaras      Json
+  nature      String
+  sample_raag String
+  mood        String
+  raags       Raag[]
 }
 
 model Taal {
-  id               String @id
+  variations       TaalVariation[]
+  id               String          @id
   name_en          String
   name_hi          String
   tradition        String
@@ -40,7 +41,7 @@ model Taal {
 }
 
 model Raag {
-  id                String @id
+  id                String  @id
   name              String
   thaat_id          String?
   thaat             Thaat?  @relation(fields: [thaat_id], references: [id])
@@ -60,4 +61,17 @@ model Raag {
   audios            Json?
   film_songs        Json?
   recordings        Json?
+}
+
+model TaalVariation {
+  id        String   @id @default(uuid())
+  taalId    String
+  taal      Taal     @relation(fields: [taalId], references: [id])
+  name      String // e.g. "Vilambit Theka Practice Variation 1"
+  tempo     String // e.g. "Slow (Vilambit)"
+  audioUrl  String // Supabase URL
+  originalBpm Float? // Exact mathematical BPM of the file
+  context   String? // Optional descriptive text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

@@ -6,6 +6,8 @@ import YouTube from 'react-youtube';
 
 import { synth } from './engine/synth';
 
+import { engine } from './engine/MetronomeEngine';
+
 function App() {
     const [dbData, setDbData] = useState(() => {
         const cached = localStorage.getItem('surtaal_db_cache');
@@ -55,15 +57,200 @@ function App() {
 function MainApp({ dbData, updateDbData }) {
     const { taals, thaats, raags } = dbData;
 
+    const [selectedVariation, setSelectedVariation] = useState(null);
+    const [isCalibrating, setIsCalibrating] = useState(false);
+    const [isEditingBaseTempo, setIsEditingBaseTempo] = useState(false);
+    const [baseTempoInputValue, setBaseTempoInputValue] = useState("");
+    const [isAudioLoaded, setIsAudioLoaded] = useState(false);
+    const variationAudioRef = useRef(null);
+
     const {
         taal, setTaal,
         bpm, setBpm,
-        isPlaying, stopRequested, togglePlay,
+        isPlaying, stopRequested, togglePlay, stopPlayImmediate,
         soundOn, setSoundOn,
         soundPack, setSoundPack,
         subdivision, setSubdivision,
         currentBeat, avartan, currentBol
-    } = useMetronome(taals, 'teentaal');
+    } = useMetronome(taals, 'teentaal', !!selectedVariation);
+
+    // Reset variation when taal changes
+    useEffect(() => {
+        if (taal && taal.variations && taal.variations.length > 0) {
+            // When taal changes, auto-select the first variation if available
+            const v = taal.variations[0];
+            setSelectedVariation(v);
+            
+            // Auto-adjust metronome BPM to match first variation tempo
+            if (v.tempo.includes('Slow') || v.tempo.includes('Vilambit')) {
+                setBpm(Math.min(taal.bpm_range[0] || 40, 60)); 
+            } else if (v.tempo.includes('Fast') || v.tempo.includes('Drut')) {
+                setBpm(Math.max(taal.bpm_range[1] || 240, 240));
+            } else {
+                setBpm(taal.default_bpm);
+            }
+        } else {
+            setSelectedVariation(null);
+            if (taal) setBpm(taal.default_bpm);
+        }
+        
+        if (variationAudioRef.current) {
+            variationAudioRef.current.pause();
+            variationAudioRef.current.currentTime = 0;
+        }
+    }, [taal]);
+
+    // Keep variations dropdown state
+    const [isVariationSelectOpen, setIsVariationSelectOpen] = useState(false);
+
+    const handleVariationSelect = (v) => {
+        if (!v) {
+            setSelectedVariation(null);
+            setIsVariationSelectOpen(false);
+            setBpm(taal.default_bpm);
+            return;
+        }
+        
+        setIsAudioLoaded(false); // Reset loading state when changing variation
+        setSelectedVariation(v);
+        setIsVariationSelectOpen(false);
+        setIsCalibrating(false);
+        
+        // Auto-adjust metronome BPM to match variation tempo
+        let newBpm = taal.default_bpm;
+        if (v.originalBpm) {
+            newBpm = Math.round(v.originalBpm);
+        } else if (v.tempo.includes('Slow') || v.tempo.includes('Vilambit')) {
+            newBpm = Math.min(taal.bpm_range[0] || 40, 60); 
+        } else if (v.tempo.includes('Fast') || v.tempo.includes('Drut')) {
+            newBpm = Math.max(taal.bpm_range[1] || 240, 240);
+        }
+        setBpm(newBpm);
+
+        // If currently playing, force a restart so the visualizer and new audio sync up from Sam
+        if (isPlaying && !stopRequested) {
+            stopPlayImmediate();
+            setTimeout(() => {
+                togglePlay(); // Restart
+            }, 50);
+        }
+    };
+
+    const saveCalibration = async () => {
+        if (!selectedVariation) return;
+        try {
+            const res = await fetch(`http://localhost:3001/api/variations/${selectedVariation.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ originalBpm: bpm })
+            });
+            if (res.ok) {
+                const updated = await res.json();
+                
+                // Update local state
+                const updatedTaals = taals.map(t => {
+                    if (t.id === taal.id) {
+                        return {
+                            ...t,
+                            variations: t.variations.map(v => v.id === updated.id ? { ...v, originalBpm: bpm } : v)
+                        };
+                    }
+                    return t;
+                });
+                
+                updateDbData({ ...dbData, taals: updatedTaals });
+                setSelectedVariation({ ...selectedVariation, originalBpm: bpm });
+                setIsCalibrating(false);
+            }
+        } catch (error) {
+            console.error("Failed to save calibration:", error);
+        }
+    };
+
+    const updateBaseTempoManual = async (newVal) => {
+        if (!selectedVariation || isNaN(newVal)) {
+            setIsEditingBaseTempo(false);
+            return;
+        }
+        const parsedBpm = parseFloat(newVal);
+        if (parsedBpm <= 0) {
+            setIsEditingBaseTempo(false);
+            return;
+        }
+
+        try {
+            const res = await fetch(`http://localhost:3001/api/variations/${selectedVariation.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ originalBpm: parsedBpm })
+            });
+            if (res.ok) {
+                const updated = await res.json();
+                
+                // Update local state
+                const updatedTaals = taals.map(t => {
+                    if (t.id === taal.id) {
+                        return {
+                            ...t,
+                            variations: t.variations.map(v => v.id === updated.id ? { ...v, originalBpm: parsedBpm } : v)
+                        };
+                    }
+                    return t;
+                });
+                
+                updateDbData({ ...dbData, taals: updatedTaals });
+                setSelectedVariation({ ...selectedVariation, originalBpm: parsedBpm });
+            }
+        } catch (error) {
+            console.error("Failed to save manual base tempo:", error);
+        }
+        setIsEditingBaseTempo(false);
+    };
+
+    // Sync Variation Audio and Engine Audio with Main Play button
+    useEffect(() => {
+        if (variationAudioRef.current) {
+            // Apply precise mathematical playback rate scaling
+            if (selectedVariation) {
+                // If the database has the exact mathematically extracted BPM, use it!
+                let trueBaseBpm = selectedVariation.originalBpm;
+                
+                if (!trueBaseBpm) {
+                    // Fallback heuristics if DB is migrating
+                    trueBaseBpm = taal.default_bpm;
+                    if (selectedVariation.tempo.includes('Slow') || selectedVariation.tempo.includes('Vilambit')) {
+                        trueBaseBpm = Math.min(taal.bpm_range[0] || 40, 60);
+                    } else if (selectedVariation.tempo.includes('Fast') || selectedVariation.tempo.includes('Drut')) {
+                        trueBaseBpm = Math.max(taal.bpm_range[1] || 240, 240);
+                    }
+                }
+                
+                // Set the playback rate directly on the audio element to lock it to the metronome
+                variationAudioRef.current.preservesPitch = true;
+                variationAudioRef.current.playbackRate = isCalibrating ? 1.0 : (bpm / trueBaseBpm);
+            }
+
+            if (isPlaying && selectedVariation && soundPack === 'tabla') {
+                variationAudioRef.current.play().catch(e => console.log("Audio play prevented:", e));
+            } else {
+                variationAudioRef.current.pause();
+                if (!isPlaying) {
+                    variationAudioRef.current.currentTime = 0;
+                }
+            }
+        }
+    }, [isPlaying, selectedVariation, bpm, taal, soundPack, isCalibrating]);
+
+    // Resync audio to Sam to prevent long-term drift
+    useEffect(() => {
+        if (variationAudioRef.current && isPlaying && !stopRequested && selectedVariation) {
+            if (currentBeat === 1) {
+                // If we are slightly off due to HTML5 audio buffer drift, forcefully snap back
+                // This ensures the visualizer and audio are perpetually locked on Sam
+                variationAudioRef.current.currentTime = 0;
+            }
+        }
+    }, [avartan]);
 
     const [isEditingBpm, setIsEditingBpm] = useState(false);
     const [bpmInputValue, setBpmInputValue] = useState(bpm);
@@ -75,6 +262,7 @@ function MainApp({ dbData, updateDbData }) {
     const [isSoundPackOpen, setIsSoundPackOpen] = useState(false);
     const taalSelectRef = useRef(null);
     const soundPackSelectRef = useRef(null);
+    const variationSelectRef = useRef(null);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -83,6 +271,9 @@ function MainApp({ dbData, updateDbData }) {
             }
             if (soundPackSelectRef.current && !soundPackSelectRef.current.contains(event.target)) {
                 setIsSoundPackOpen(false);
+            }
+            if (variationSelectRef.current && !variationSelectRef.current.contains(event.target)) {
+                setIsVariationSelectOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -339,27 +530,17 @@ function MainApp({ dbData, updateDbData }) {
     };
 
     return (
-        <div className="min-h-screen bg-background text-textMain flex flex-col items-center justify-center p-4 selection:bg-primary/30 font-sans">
+        <div className="min-h-screen bg-background text-textMain flex flex-col items-center p-4 selection:bg-primary/30 font-sans">
             
-            <header className="fixed top-0 w-full p-4 flex flex-col md:flex-row justify-between items-center max-w-5xl z-30 bg-background/90 backdrop-blur-md border-b border-borderFaint">
-                <div className="flex items-center justify-between w-full md:w-auto">
-                    <div className="flex items-center gap-2 mb-4 md:mb-0">
-                        <div className="w-10 h-10 flex items-center justify-center rounded-full bg-primary/10 text-primary">
-                            <Music className="w-5 h-5" />
-                        </div>
-                        <h1 className="text-xl font-bold tracking-wider">TAAL<span className="text-primary font-light">FORGE</span></h1>
+            <header className="w-full p-4 flex justify-between items-center max-w-5xl z-[150] bg-background border-b border-borderFaint mb-4">
+                <div className="flex items-center gap-2">
+                    <div className="w-10 h-10 flex items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <Music className="w-5 h-5" />
                     </div>
-                    
-                    <button 
-                        onClick={() => setIsLightMode(!isLightMode)}
-                        className="md:hidden p-2 rounded-full hover:bg-surfaceHover text-textMuted hover:text-textMain transition-colors mb-4"
-                        title="Toggle Theme"
-                    >
-                        {isLightMode ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-                    </button>
+                    <h1 className="text-xl font-bold tracking-wider hidden sm:block">TAAL<span className="text-primary font-light">FORGE</span></h1>
                 </div>
                 
-                <nav className="flex gap-2 overflow-x-auto pb-2 md:pb-0 hide-scrollbar w-full md:w-auto px-4 md:px-0">
+                <nav className="flex gap-2 overflow-x-auto hide-scrollbar">
                     {[
                         { id: 'taal', label: 'Taal Lab', icon: Play },
                         { id: 'raag', label: 'Raag Explorer', icon: Music },
@@ -379,7 +560,7 @@ function MainApp({ dbData, updateDbData }) {
                     
                     <button 
                         onClick={() => setIsLightMode(!isLightMode)}
-                        className="hidden md:flex items-center justify-center ml-2 p-2 rounded-full hover:bg-surfaceHover text-textMuted hover:text-textMain transition-colors"
+                        className="flex items-center justify-center ml-2 p-2 rounded-full hover:bg-surfaceHover text-textMuted hover:text-textMain transition-colors"
                         title="Toggle Theme"
                     >
                         {isLightMode ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
@@ -387,248 +568,362 @@ function MainApp({ dbData, updateDbData }) {
                 </nav>
             </header>
 
-            <main className="w-full max-w-5xl flex flex-col items-center gap-12 mt-32 px-4">
+            <main className="w-full max-w-5xl flex flex-col items-center gap-6 px-4 pb-12">
                 
                 {/* TAAL LAB */}
                 {activeTab === 'taal' && (
-                    <div className="w-full flex flex-col items-center gap-8 animate-in fade-in zoom-in-95 duration-300">
+                    <div className="w-full flex flex-col items-center gap-5 animate-in fade-in zoom-in-95 duration-300">
                         {/* Taal Selector & Sound Kit */}
-                        <div className="flex flex-col md:flex-row gap-4 w-full max-w-2xl">
-                            <div className="relative group z-50 w-full flex gap-2" ref={taalSelectRef}>
-                                <div className="relative w-full">
+                        <div className="flex flex-col gap-3 w-full max-w-2xl">
+                            
+                            {/* Row 1: Taal and SoundKit */}
+                            <div className="flex flex-col md:flex-row gap-3 w-full justify-center">
+                                {/* Taal Selector */}
+                                <div className="relative group z-50 w-full md:w-auto md:min-w-[280px] flex gap-2" ref={taalSelectRef}>
+                                    <div className="relative w-full">
+                                        <button 
+                                            onClick={() => setIsTaalSelectOpen(!isTaalSelectOpen)}
+                                            className="w-full bg-surface border border-borderMain text-lg font-bold py-3 px-5 rounded-2xl cursor-pointer hover:border-primary/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 text-center shadow-sm text-textMain flex items-center justify-center gap-2"
+                                        >
+                                            <span className="truncate">{taal.name.en} • {taal.name.hi} ({taal.maatras})</span>
+                                            <ChevronDown className={`w-5 h-5 text-textMuted transition-transform ${isTaalSelectOpen ? 'rotate-180' : ''}`} />
+                                        </button>
+                                        
+                                        <AnimatePresence>
+                                            {isTaalSelectOpen && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, y: -10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    exit={{ opacity: 0, y: -10 }}
+                                                    transition={{ duration: 0.2 }}
+                                                    className="absolute top-full left-0 right-0 mt-2 bg-surface/95 backdrop-blur-xl border border-borderMain rounded-2xl shadow-2xl z-[100] max-h-[400px] overflow-y-auto hide-scrollbar overflow-x-hidden"
+                                                >
+                                                    <div className="p-2">
+                                                        <div className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-textMuted/70">Hindustani Classical</div>
+                                                        {taals.filter(t => t.tradition === 'Hindustani').map(t => (
+                                                            <button
+                                                                key={t.id}
+                                                                onClick={() => { setTaal(t); setIsTaalSelectOpen(false); }}
+                                                                className={`w-full text-left px-4 py-3 rounded-xl transition-colors flex items-center justify-between group ${taal.id === t.id ? 'bg-primary text-background shadow-md' : 'text-textMain hover:bg-surfaceHover'}`}
+                                                            >
+                                                                <span className="font-bold text-base truncate">{t.name.en} • {t.name.hi} <span className={`font-medium text-sm transition-colors ${taal.id === t.id ? 'text-background/80' : 'text-textMuted group-hover:text-primary/70'}`}>({t.maatras})</span></span>
+                                                                {taal.id === t.id && <Check className="w-4 h-4" />}
+                                                            </button>
+                                                        ))}
+                                                        
+                                                        <div className="px-3 py-2 mt-2 text-xs font-bold uppercase tracking-widest text-textMuted/70 border-t border-borderFaint pt-4">Carnatic Sapta-Taala</div>
+                                                        {taals.filter(t => t.tradition === 'Carnatic').map(t => (
+                                                            <button
+                                                                key={t.id}
+                                                                onClick={() => { setTaal(t); setIsTaalSelectOpen(false); }}
+                                                                className={`w-full text-left px-4 py-3 rounded-xl transition-colors flex items-center justify-between group ${taal.id === t.id ? 'bg-primary text-background shadow-md' : 'text-textMain hover:bg-surfaceHover'}`}
+                                                            >
+                                                                <span className="font-bold text-base truncate">{t.name.en} <span className={`font-medium text-sm transition-colors ${taal.id === t.id ? 'text-background/80' : 'text-textMuted group-hover:text-primary/70'}`}>({t.maatras})</span></span>
+                                                                {taal.id === t.id && <Check className="w-4 h-4" />}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+                                    </div>
                                     <button 
-                                        onClick={() => setIsTaalSelectOpen(!isTaalSelectOpen)}
-                                        className="w-full bg-surface border border-borderMain text-xl font-bold py-4 px-6 rounded-2xl cursor-pointer hover:border-primary/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 text-center shadow-sm text-textMain flex items-center justify-center gap-2"
+                                        className="bg-surface border border-borderMain p-3 rounded-2xl hover:border-primary/50 hover:text-primary transition-colors flex-shrink-0 shadow-sm text-textMain flex items-center justify-center"
+                                        onClick={() => setShowInfoModal(true)}
+                                        title="Taal Information"
                                     >
-                                        <span className="truncate">{taal.name.en} • {taal.name.hi} ({taal.maatras})</span>
-                                        <ChevronDown className={`w-5 h-5 text-textMuted transition-transform ${isTaalSelectOpen ? 'rotate-180' : ''}`} />
+                                        <Info className="w-5 h-5" />
                                     </button>
-                                    
+                                </div>
+
+                                {/* Sound Pack Selector */}
+                                <div className="relative w-full md:w-48 flex-shrink-0 z-40" ref={soundPackSelectRef}>
+                                    <button 
+                                        onClick={() => setIsSoundPackOpen(!isSoundPackOpen)}
+                                        className="w-full bg-surface border border-borderMain py-3 px-5 rounded-2xl cursor-pointer hover:border-primary/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 text-textMain text-center shadow-sm font-semibold text-base flex items-center justify-center gap-2"
+                                    >
+                                        <span>{soundPack === 'tabla' ? 'Tabla Kit' : 'Metronome'}</span>
+                                        <ChevronDown className={`w-5 h-5 text-textMuted transition-transform ${isSoundPackOpen ? 'rotate-180' : ''}`} />
+                                    </button>
+
                                     <AnimatePresence>
-                                        {isTaalSelectOpen && (
+                                        {isSoundPackOpen && (
                                             <motion.div
                                                 initial={{ opacity: 0, y: -10 }}
                                                 animate={{ opacity: 1, y: 0 }}
                                                 exit={{ opacity: 0, y: -10 }}
                                                 transition={{ duration: 0.2 }}
-                                                className="absolute top-full left-0 right-0 mt-2 bg-surface/95 backdrop-blur-xl border border-borderMain rounded-2xl shadow-2xl z-[100] max-h-[400px] overflow-y-auto hide-scrollbar overflow-x-hidden"
+                                                className="absolute top-full left-0 right-0 mt-2 bg-surface/95 backdrop-blur-xl border border-borderMain rounded-2xl shadow-2xl z-[100] p-2"
                                             >
-                                                <div className="p-2">
-                                                    <div className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-textMuted/70">Hindustani Classical</div>
-                                                    {taals.filter(t => t.tradition === 'Hindustani').map(t => (
-                                                        <button
-                                                            key={t.id}
-                                                            onClick={() => { setTaal(t); setIsTaalSelectOpen(false); }}
-                                                            className={`w-full text-left px-4 py-3 rounded-xl transition-colors flex items-center justify-between group ${taal.id === t.id ? 'bg-primary text-background shadow-md' : 'text-textMain hover:bg-surfaceHover'}`}
-                                                        >
-                                                            <span className="font-bold text-base truncate">{t.name.en} • {t.name.hi} <span className={`font-medium text-sm transition-colors ${taal.id === t.id ? 'text-background/80' : 'text-textMuted group-hover:text-primary/70'}`}>({t.maatras})</span></span>
-                                                            {taal.id === t.id && <Check className="w-4 h-4" />}
-                                                        </button>
-                                                    ))}
-                                                    
-                                                    <div className="px-3 py-2 mt-2 text-xs font-bold uppercase tracking-widest text-textMuted/70 border-t border-borderFaint pt-4">Carnatic Sapta-Taala</div>
-                                                    {taals.filter(t => t.tradition === 'Carnatic').map(t => (
-                                                        <button
-                                                            key={t.id}
-                                                            onClick={() => { setTaal(t); setIsTaalSelectOpen(false); }}
-                                                            className={`w-full text-left px-4 py-3 rounded-xl transition-colors flex items-center justify-between group ${taal.id === t.id ? 'bg-primary text-background shadow-md' : 'text-textMain hover:bg-surfaceHover'}`}
-                                                        >
-                                                            <span className="font-bold text-base truncate">{t.name.en} <span className={`font-medium text-sm transition-colors ${taal.id === t.id ? 'text-background/80' : 'text-textMuted group-hover:text-primary/70'}`}>({t.maatras})</span></span>
-                                                            {taal.id === t.id && <Check className="w-4 h-4" />}
-                                                        </button>
-                                                    ))}
-                                                </div>
+                                                <button
+                                                    onClick={() => { setSoundPack('tabla'); setIsSoundPackOpen(false); }}
+                                                    className={`w-full text-left px-4 py-3 rounded-xl transition-colors flex items-center justify-between ${soundPack === 'tabla' ? 'bg-primary text-background shadow-md' : 'text-textMain hover:bg-surfaceHover'}`}
+                                                >
+                                                    <span className="font-bold">Tabla Kit</span>
+                                                    {soundPack === 'tabla' && <Check className="w-4 h-4" />}
+                                                </button>
+                                                <button
+                                                    onClick={() => { setSoundPack('click'); setIsSoundPackOpen(false); }}
+                                                    className={`w-full text-left px-4 py-3 rounded-xl transition-colors flex items-center justify-between ${soundPack === 'click' ? 'bg-primary text-background shadow-md' : 'text-textMain hover:bg-surfaceHover'}`}
+                                                >
+                                                    <span className="font-bold">Metronome</span>
+                                                    {soundPack === 'click' && <Check className="w-4 h-4" />}
+                                                </button>
                                             </motion.div>
                                         )}
                                     </AnimatePresence>
                                 </div>
-                                <button 
-                                    className="bg-surface border border-borderMain p-4 rounded-2xl hover:border-primary/50 hover:text-primary transition-colors flex-shrink-0 shadow-sm text-textMain"
-                                    onClick={() => setShowInfoModal(true)}
-                                    title="Taal Information"
-                                >
-                                    <Info />
-                                </button>
                             </div>
-                            <div className="relative w-full md:w-56 flex-shrink-0 z-40" ref={soundPackSelectRef}>
-                                <button 
-                                    onClick={() => setIsSoundPackOpen(!isSoundPackOpen)}
-                                    className="w-full bg-surface border border-borderMain py-4 px-6 rounded-2xl cursor-pointer hover:border-primary/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 text-textMain text-center shadow-sm font-semibold text-lg flex items-center justify-center gap-2"
-                                >
-                                    <span>{soundPack === 'tabla' ? 'Tabla Kit' : 'Metronome'}</span>
-                                    <ChevronDown className={`w-5 h-5 text-textMuted transition-transform ${isSoundPackOpen ? 'rotate-180' : ''}`} />
-                                </button>
 
-                                <AnimatePresence>
-                                    {isSoundPackOpen && (
-                                        <motion.div
-                                            initial={{ opacity: 0, y: -10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0, y: -10 }}
-                                            transition={{ duration: 0.2 }}
-                                            className="absolute top-full left-0 right-0 mt-2 bg-surface/95 backdrop-blur-xl border border-borderMain rounded-2xl shadow-2xl z-[100] p-2"
+                            {/* Variation Selector (Dynamic if variations exist) */}
+                            {taal.variations && taal.variations.length > 0 && (
+                                <div className="relative group z-45 w-full md:w-auto md:min-w-[350px] mx-auto flex" ref={variationSelectRef}>
+                                    <div className="relative w-full">
+                                        <button 
+                                            onClick={() => setIsVariationSelectOpen(!isVariationSelectOpen)}
+                                            className="w-full bg-surface border border-borderMain text-base font-medium py-3 px-5 rounded-2xl cursor-pointer hover:border-primary/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 text-center shadow-sm text-textMain flex items-center justify-center gap-2"
                                         >
-                                            <button
-                                                onClick={() => { setSoundPack('tabla'); setIsSoundPackOpen(false); }}
-                                                className={`w-full text-left px-4 py-3 rounded-xl transition-colors flex items-center justify-between ${soundPack === 'tabla' ? 'bg-primary text-background shadow-md' : 'text-textMain hover:bg-surfaceHover'}`}
-                                            >
-                                                <span className="font-bold">Tabla Kit</span>
-                                                {soundPack === 'tabla' && <Check className="w-4 h-4" />}
-                                            </button>
-                                            <button
-                                                onClick={() => { setSoundPack('click'); setIsSoundPackOpen(false); }}
-                                                className={`w-full text-left px-4 py-3 rounded-xl transition-colors flex items-center justify-between ${soundPack === 'click' ? 'bg-primary text-background shadow-md' : 'text-textMain hover:bg-surfaceHover'}`}
-                                            >
-                                                <span className="font-bold">Metronome</span>
-                                                {soundPack === 'click' && <Check className="w-4 h-4" />}
-                                            </button>
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
-                            </div>
+                                            <span className="truncate">{selectedVariation ? selectedVariation.name : 'Select Variation'}</span>
+                                            <ChevronDown className={`w-5 h-5 text-textMuted transition-transform ${isVariationSelectOpen ? 'rotate-180' : ''}`} />
+                                        </button>
+                                        
+                                        <AnimatePresence>
+                                            {isVariationSelectOpen && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, y: -10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    exit={{ opacity: 0, y: -10 }}
+                                                    transition={{ duration: 0.2 }}
+                                                    className="absolute top-full left-0 right-0 mt-2 bg-surface/95 backdrop-blur-xl border border-borderMain rounded-2xl shadow-2xl z-[100] max-h-[400px] overflow-y-auto hide-scrollbar overflow-x-hidden"
+                                                >
+                                                    <div className="p-2">
+                                                        <div className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-textMuted/70">Audio Variations</div>
+                                                        {taal.variations.map(v => (
+                                                            <button
+                                                                key={v.id}
+                                                                onClick={() => handleVariationSelect(v)}
+                                                                className={`w-full text-left px-4 py-3 rounded-xl transition-colors flex flex-col group ${selectedVariation?.id === v.id ? 'bg-primary text-background shadow-md' : 'text-textMain hover:bg-surfaceHover'}`}
+                                                            >
+                                                                <div className="flex items-center justify-between w-full">
+                                                                    <span className="font-bold text-sm truncate">{v.name}</span>
+                                                                    {selectedVariation?.id === v.id && <Check className="w-4 h-4 flex-shrink-0" />}
+                                                                </div>
+                                                                <span className={`text-xs mt-1 ${selectedVariation?.id === v.id ? 'text-background/80' : 'text-textMuted group-hover:text-primary/70'}`}>
+                                                                    {v.tempo}
+                                                                </span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Main Visualizer */}
-                        <div className="w-full flex flex-wrap justify-center gap-4 md:gap-6 my-4 min-h-[100px]">
+                        <div className="w-full flex flex-wrap justify-center gap-3 md:gap-5 my-0">
                             {renderVisualizer()}
                         </div>
 
-                        {/* Counters & Timer */}
-                        <div className="flex flex-wrap justify-center gap-8 md:gap-16 text-center w-full">
-                            <div>
-                                <p className="text-textMuted text-sm font-medium tracking-widest uppercase mb-1">Beat</p>
-                                <p className="text-5xl font-bold tabular-nums text-primary">{currentBeat}</p>
+                            {/* Controls Container: Row of Controls */}
+                        <div className="flex flex-col md:flex-row items-center md:items-start justify-center w-full max-w-5xl gap-8 md:gap-12 mt-2">
+                            
+                            {/* Counters & Timer (Left) */}
+                            <div className="flex flex-col gap-6 text-center md:pt-4">
+                                <div className="flex gap-8">
+                                    <div>
+                                        <p className="text-textMuted text-sm font-medium tracking-widest uppercase mb-0">Beat</p>
+                                        <p className="text-4xl font-bold tabular-nums text-primary">{currentBeat}</p>
+                                    </div>
+                                    <div className="min-w-[70px]">
+                                        <p className="text-textMuted text-sm font-medium tracking-widest uppercase mb-0">Bol</p>
+                                        <p className="text-4xl font-bold font-devanagari text-primary drop-shadow-sm">{currentBol?.hi || '--'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-textMuted text-sm font-medium tracking-widest uppercase mb-0">Avartan</p>
+                                        <p className="text-4xl font-bold tabular-nums text-secondary">{avartan}</p>
+                                    </div>
+                                </div>
+                                <div className="relative group mx-auto">
+                                    <p className="text-textMuted text-sm font-medium tracking-widest uppercase mb-0">Timer</p>
+                                    <p 
+                                        className={`text-4xl font-bold tabular-nums cursor-pointer transition-colors ${isTimerRunning ? 'text-green-400' : 'text-textMuted hover:text-textMain'}`}
+                                        onClick={() => setIsTimerRunning(!isTimerRunning)}
+                                        title="Click to start/pause timer"
+                                    >
+                                        {formatTime(practiceSeconds)}
+                                    </p>
+                                    <button 
+                                        onClick={() => { setIsTimerRunning(false); setPracticeSeconds(0); }}
+                                        className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-textMuted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        Reset
+                                    </button>
+                                </div>
                             </div>
-                            <div className="min-w-[120px]">
-                                <p className="text-textMuted text-sm font-medium tracking-widest uppercase mb-1">Bol</p>
-                                <p className="text-5xl font-bold font-devanagari text-primary drop-shadow-sm">{currentBol?.hi || '--'}</p>
+
+                            {/* Tempo Control & Laya Ratio (Center) */}
+                            <div className="flex flex-col items-center w-full max-w-[320px] gap-4 bg-surfaceHover rounded-3xl p-5 shadow-xl border border-borderMain">
+                                <div className="flex items-center justify-between w-full">
+                                    <button 
+                                        className="w-10 h-10 flex justify-center items-center rounded-full bg-surface hover:bg-surfaceHover border border-borderFaint text-xl font-light transition-all active:scale-95 text-textMain shadow-sm"
+                                        onClick={() => setBpm(Math.max(20, bpm - 1))}
+                                    >−</button>
+                                    
+                                    <div className="flex flex-col items-center justify-center">
+                                        {isEditingBpm ? (
+                                            <input 
+                                                type="number" 
+                                                autoFocus
+                                                className="bg-transparent text-4xl font-black text-center w-24 focus:outline-none focus:border-b-2 focus:border-primary tabular-nums text-textMain drop-shadow-sm tracking-tight"
+                                                value={bpmInputValue} 
+                                                onChange={(e) => setBpmInputValue(e.target.value)} 
+                                                onBlur={handleBpmInputBlur}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') handleBpmInputBlur(); }}
+                                            />
+                                        ) : (
+                                            <div className="text-4xl font-black tabular-nums cursor-pointer hover:text-primary transition-colors text-textMain drop-shadow-sm tracking-tight" onClick={() => setIsEditingBpm(true)}>
+                                                {bpm}
+                                            </div>
+                                        )}
+                                        <p className="text-textMuted text-[0.65rem] font-bold tracking-[0.2em] uppercase opacity-80">BPM</p>
+                                    </div>
+
+                                    <button 
+                                        className="w-10 h-10 flex justify-center items-center rounded-full bg-surface hover:bg-surfaceHover border border-borderFaint text-xl font-light transition-all active:scale-95 text-textMain shadow-sm"
+                                        onClick={() => setBpm(Math.min(400, bpm + 1))}
+                                    >+</button>
+                                </div>
+
+                                <div className="w-full relative py-2">
+                                    <div className="absolute inset-0 top-1/2 -translate-y-1/2 h-1.5 bg-surface rounded-full overflow-hidden border border-borderFaint">
+                                        <div 
+                                            className="h-full bg-amber-500 rounded-full" 
+                                            style={{ width: `${((bpm - (taal.bpm_range[0] || 30)) / ((taal.bpm_range[1] || 300) - (taal.bpm_range[0] || 30))) * 100}%` }}
+                                        ></div>
+                                    </div>
+                                    <input 
+                                        type="range" 
+                                        min={taal.bpm_range[0] || 30} 
+                                        max={taal.bpm_range[1] || 300} 
+                                        value={bpm} 
+                                        onChange={(e) => setBpm(parseInt(e.target.value, 10))} 
+                                        className="relative w-full h-2 appearance-none bg-transparent cursor-pointer z-10 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber-500"
+                                    />
+                                </div>
+
+                                {selectedVariation && soundPack === 'tabla' && (
+                                    <div className="w-full mt-1 px-3 py-2 rounded-xl bg-background/50 border border-borderFaint flex items-center justify-between">
+                                        <div className="flex flex-col text-left">
+                                            <span className="text-[0.6rem] font-bold text-textMuted uppercase tracking-wider">Base Tempo</span>
+                                            {isEditingBaseTempo ? (
+                                                <input 
+                                                    type="number"
+                                                    step="0.01"
+                                                    autoFocus
+                                                    className="bg-surface border border-primary/50 text-sm font-medium text-primary rounded px-1 w-20 focus:outline-none focus:ring-1 focus:ring-primary"
+                                                    value={baseTempoInputValue}
+                                                    onChange={(e) => setBaseTempoInputValue(e.target.value)}
+                                                    onBlur={() => updateBaseTempoManual(baseTempoInputValue)}
+                                                    onKeyDown={(e) => { if (e.key === 'Enter') updateBaseTempoManual(baseTempoInputValue); }}
+                                                />
+                                            ) : (
+                                                <span 
+                                                    className="text-sm font-medium text-primary cursor-pointer hover:underline"
+                                                    onClick={() => {
+                                                        setBaseTempoInputValue(selectedVariation.originalBpm ? selectedVariation.originalBpm.toFixed(2) : taal.default_bpm);
+                                                        setIsEditingBaseTempo(true);
+                                                    }}
+                                                    title="Click to manually edit exact Base Tempo"
+                                                >
+                                                    {selectedVariation.originalBpm ? `${selectedVariation.originalBpm.toFixed(2)} BPM` : 'Uncalibrated'}
+                                                </span>
+                                            )}
+                                        </div>
+                                        
+                                        {isCalibrating ? (
+                                            <div className="flex gap-2">
+                                                <button onClick={() => setIsCalibrating(false)} className="px-2.5 py-1.5 rounded-lg text-[0.7rem] font-bold bg-surfaceHover text-textMuted hover:text-textMain">Cancel</button>
+                                                <button onClick={saveCalibration} className="px-2.5 py-1.5 rounded-lg text-[0.7rem] font-bold bg-green-500/20 text-green-500 hover:bg-green-500 hover:text-white flex items-center gap-1"><Save className="w-3 h-3"/> Save</button>
+                                            </div>
+                                        ) : (
+                                            <button onClick={() => { setIsCalibrating(true); setBpm(Math.round(selectedVariation.originalBpm || taal.default_bpm)); }} className="px-2.5 py-1.5 rounded-lg text-[0.7rem] font-bold bg-surfaceHover text-textMuted hover:text-primary transition-colors flex items-center gap-1">
+                                                <Edit3 className="w-3 h-3"/> Calibrate
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                                {isCalibrating && soundPack === 'tabla' && (
+                                    <p className="text-[0.65rem] text-amber-500 text-center w-full mt-0 leading-tight">Audio is locked to 1x speed. Play it, tap the exact BPM to align the visualizer, and hit Save.</p>
+                                )}
+
+                                {/* Laya (Subdivision) Selector */}
+                                <div className="flex bg-surface rounded-xl p-1 w-full border border-borderFaint mt-1">
+                                    {[
+                                        { val: 1, label: '1x', sub: '' },
+                                        { val: 2, label: '2x', sub: '(Dugun)' },
+                                        { val: 3, label: '3x', sub: '(Tigun)' },
+                                        { val: 4, label: '4x', sub: '(Chaugun)' },
+                                    ].map(l => (
+                                        <button
+                                            key={l.val}
+                                            onClick={() => setSubdivision(l.val)}
+                                            className={`flex-1 flex flex-col items-center justify-center py-1.5 rounded-lg transition-all duration-200 ${
+                                                subdivision === l.val 
+                                                ? 'bg-amber-500 text-white shadow-md font-bold' 
+                                                : 'text-textMuted hover:text-textMain hover:bg-surfaceHover font-semibold'
+                                            }`}
+                                        >
+                                            <span className="text-sm">{l.label}</span>
+                                            {l.sub && <span className={`text-[0.55rem] ${subdivision === l.val ? 'text-white/90 font-bold' : 'text-textMuted/70 font-semibold'}`}>{l.sub}</span>}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
-                            <div>
-                                <p className="text-textMuted text-sm font-medium tracking-widest uppercase mb-1">Avartan</p>
-                                <p className="text-5xl font-bold tabular-nums text-secondary">{avartan}</p>
-                            </div>
-                            <div className="relative group">
-                                <p className="text-textMuted text-sm font-medium tracking-widest uppercase mb-1">Timer</p>
-                                <p 
-                                    className={`text-5xl font-bold tabular-nums cursor-pointer transition-colors ${isTimerRunning ? 'text-green-400' : 'text-textMuted hover:text-textMain'}`}
-                                    onClick={() => setIsTimerRunning(!isTimerRunning)}
-                                    title="Click to start/pause timer"
-                                >
-                                    {formatTime(practiceSeconds)}
-                                </p>
+
+                            {/* Action Bar (Right) */}
+                            <div className="flex md:flex-col items-center justify-center gap-4 md:pt-4">
                                 <button 
-                                    onClick={() => { setIsTimerRunning(false); setPracticeSeconds(0); }}
-                                    className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-textMuted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    className={`w-12 h-12 flex items-center justify-center rounded-full transition-colors border ${soundOn ? 'bg-surface border-borderMain text-textMain' : 'bg-surfaceHover border-transparent text-textMuted'}`}
+                                    onClick={() => setSoundOn(!soundOn)}
+                                    title="Toggle Sound"
                                 >
-                                    Reset
+                                    {soundOn ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+                                </button>
+
+                                <button 
+                                    className={`w-24 h-24 flex items-center justify-center rounded-full transition-all duration-300 shadow-xl ${
+                                        (!isAudioLoaded && selectedVariation && soundPack === 'tabla')
+                                        ? 'bg-surfaceHover border-2 border-borderFaint text-textMuted cursor-wait'
+                                        : (isPlaying && !stopRequested) 
+                                        ? 'bg-red-500/10 border-2 border-red-500 text-red-500 hover:bg-red-500 hover:text-textMain shadow-red-500/20' 
+                                        : 'bg-primary border-2 border-primary text-background hover:bg-primary/90 hover:scale-105 shadow-primary/20'
+                                    }`}
+                                    onClick={togglePlay}
+                                    disabled={!isAudioLoaded && selectedVariation && soundPack === 'tabla'}
+                                >
+                                    {(!isAudioLoaded && selectedVariation && soundPack === 'tabla') ? (
+                                        <div className="w-8 h-8 border-4 border-textMuted/30 border-t-textMuted rounded-full animate-spin" />
+                                    ) : (isPlaying && !stopRequested) ? (
+                                        <Square fill="currentColor" className="w-10 h-10" />
+                                    ) : (
+                                        <Play fill="currentColor" className="w-10 h-10 ml-1" />
+                                    )}
+                                </button>
+
+                                <button 
+                                    className="w-12 h-12 flex items-center justify-center rounded-full bg-surface border border-borderMain hover:border-primary/50 transition-colors text-xs font-bold tracking-widest active:bg-primary/20"
+                                    onClick={handleTapTempo}
+                                >
+                                    TAP
                                 </button>
                             </div>
-                        </div>
 
-                        {/* Tempo Control & Laya Ratio */}
-                        <div className="flex flex-col items-center w-full max-w-[400px] gap-8 bg-surfaceHover rounded-3xl p-8 shadow-2xl border border-borderMain">
-                            <div className="flex items-center justify-between w-full">
-                                <button 
-                                    className="w-12 h-12 flex justify-center items-center rounded-full bg-surface hover:bg-surfaceHover border border-borderFaint text-2xl font-light transition-all active:scale-95 text-textMain shadow-sm"
-                                    onClick={() => setBpm(Math.max(20, bpm - 1))}
-                                >−</button>
-                                
-                                <div className="flex flex-col items-center justify-center">
-                                    {isEditingBpm ? (
-                                        <input 
-                                            type="number" 
-                                            autoFocus
-                                            className="bg-transparent text-5xl font-black text-center w-32 focus:outline-none focus:border-b-2 focus:border-primary tabular-nums text-textMain drop-shadow-sm tracking-tight"
-                                            value={bpmInputValue} 
-                                            onChange={(e) => setBpmInputValue(e.target.value)} 
-                                            onBlur={handleBpmInputBlur}
-                                            onKeyDown={(e) => { if (e.key === 'Enter') handleBpmInputBlur(); }}
-                                        />
-                                    ) : (
-                                        <div className="text-5xl font-black tabular-nums cursor-pointer hover:text-primary transition-colors text-textMain drop-shadow-sm tracking-tight" onClick={() => setIsEditingBpm(true)}>
-                                            {bpm}
-                                        </div>
-                                    )}
-                                    <p className="text-textMuted text-[0.65rem] font-bold tracking-[0.2em] uppercase mt-1 opacity-80">BPM</p>
-                                </div>
-
-                                <button 
-                                    className="w-12 h-12 flex justify-center items-center rounded-full bg-surface hover:bg-surfaceHover border border-borderFaint text-2xl font-light transition-all active:scale-95 text-textMain shadow-sm"
-                                    onClick={() => setBpm(Math.min(400, bpm + 1))}
-                                >+</button>
-                            </div>
-
-                            <div className="w-full relative py-2">
-                                <div className="absolute inset-0 top-1/2 -translate-y-1/2 h-1.5 bg-surface rounded-full overflow-hidden border border-borderFaint">
-                                    <div 
-                                        className="h-full bg-amber-500 rounded-full" 
-                                        style={{ width: `${((bpm - (taal.bpm_range[0] || 30)) / ((taal.bpm_range[1] || 300) - (taal.bpm_range[0] || 30))) * 100}%` }}
-                                    ></div>
-                                </div>
-                                <input 
-                                    type="range" 
-                                    min={taal.bpm_range[0] || 30} 
-                                    max={taal.bpm_range[1] || 300} 
-                                    value={bpm} 
-                                    onChange={(e) => setBpm(parseInt(e.target.value, 10))} 
-                                    className="relative w-full h-2 appearance-none bg-transparent cursor-pointer z-10 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber-500"
-                                />
-                            </div>
-
-                            {/* Laya (Subdivision) Selector */}
-                            <div className="flex bg-surface rounded-xl p-1.5 w-full border border-borderFaint">
-                                {[
-                                    { val: 1, label: '1x', sub: '' },
-                                    { val: 2, label: '2x', sub: '(Dugun)' },
-                                    { val: 3, label: '3x', sub: '(Tigun)' },
-                                    { val: 4, label: '4x', sub: '(Chaugun)' },
-                                ].map(l => (
-                                    <button
-                                        key={l.val}
-                                        onClick={() => setSubdivision(l.val)}
-                                        className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-lg transition-all duration-200 ${
-                                            subdivision === l.val 
-                                            ? 'bg-amber-500 text-white shadow-md font-bold' 
-                                            : 'text-textMuted hover:text-textMain hover:bg-surfaceHover font-semibold'
-                                        }`}
-                                    >
-                                        <span className="text-sm">{l.label}</span>
-                                        {l.sub && <span className={`text-[0.55rem] mt-0.5 ${subdivision === l.val ? 'text-white/90 font-bold' : 'text-textMuted/70 font-semibold'}`}>{l.sub}</span>}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Action Bar */}
-                        <div className="flex items-center gap-6 mt-4">
-                            <button 
-                                className={`w-14 h-14 flex items-center justify-center rounded-full transition-colors border ${soundOn ? 'bg-surface border-borderMain text-textMain' : 'bg-surfaceHover border-transparent text-textMuted'}`}
-                                onClick={() => setSoundOn(!soundOn)}
-                                title="Toggle Sound"
-                            >
-                                {soundOn ? <Volume2 /> : <VolumeX />}
-                            </button>
-
-                            <button 
-                                className={`w-24 h-24 flex items-center justify-center rounded-full transition-all duration-300 shadow-xl ${
-                                    (isPlaying && !stopRequested) 
-                                    ? 'bg-red-500/10 border-2 border-red-500 text-red-500 hover:bg-red-500 hover:text-textMain shadow-red-500/20' 
-                                    : 'bg-primary border-2 border-primary text-background hover:bg-primary/90 hover:scale-105 shadow-primary/20'
-                                }`}
-                                onClick={togglePlay}
-                            >
-                                {(isPlaying && !stopRequested) ? <Square fill="currentColor" className="w-8 h-8" /> : <Play fill="currentColor" className="w-10 h-10 ml-1" />}
-                            </button>
-
-                            <button 
-                                className="w-14 h-14 flex items-center justify-center rounded-full bg-surface border border-borderMain hover:border-primary/50 transition-colors text-sm font-bold tracking-widest active:bg-primary/20"
-                                onClick={handleTapTempo}
-                            >
-                                TAP
-                            </button>
                         </div>
                         
-                        {stopRequested && <p className="text-primary text-sm animate-pulse">Stopping at Sam...</p>}
+                        {stopRequested && <p className="text-primary text-sm animate-pulse m-0">Stopping at Sam...</p>}
                     </div>
                 )}
 
@@ -1229,6 +1524,15 @@ function MainApp({ dbData, updateDbData }) {
                     </>
                 )}
             </AnimatePresence>
+
+            {/* Hidden Audio Element for Variations Preview */}
+            <audio 
+                ref={variationAudioRef}
+                src={selectedVariation?.audioUrl}
+                onCanPlayThrough={() => setIsAudioLoaded(true)}
+                loop
+                className="hidden"
+            />
         </div>
     );
 }
