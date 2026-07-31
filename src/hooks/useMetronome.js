@@ -2,8 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { engine } from '../engine/MetronomeEngine';
 
 export function useMetronome(initialTaals, initialTaalId = 'teentaal', isVariationActive = false) {
-    const [taal, setTaal] = useState(initialTaals.find(t => t.id === initialTaalId) || initialTaals[0]);
-    const [bpm, setBpm] = useState(taal.default_bpm);
+    const defaultTaal = (initialTaals && initialTaals.length > 0) ? (initialTaals.find(t => t.id === initialTaalId) || initialTaals[0]) : null;
+    const [taal, setTaal] = useState(defaultTaal);
+    const [bpm, setBpm] = useState(defaultTaal ? defaultTaal.default_bpm : 120);
     const [isPlaying, setIsPlaying] = useState(false);
     const [soundOn, setSoundOn] = useState(true);
     const [stopRequested, setStopRequested] = useState(false);
